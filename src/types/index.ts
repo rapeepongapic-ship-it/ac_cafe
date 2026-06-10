@@ -1,12 +1,13 @@
+export interface MenuItemPlatformPrice {
+  platformId: string;
+  pricePerCup: number;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
   costPerCup: number;
-}
-
-export interface PlatformMenuPrice {
-  menuItemId: string;
-  pricePerCup: number;
+  platformPrices: MenuItemPlatformPrice[]; // ราคาขายในแต่ละ platform
 }
 
 export interface Platform {
@@ -14,7 +15,7 @@ export interface Platform {
   name: string;
   feePercent: number;
   feeLabel: string;
-  menuPrices: PlatformMenuPrice[];
+  // ไม่มี menuPrices แล้ว — ย้ายไปอยู่ใน MenuItem แทน
 }
 
 export interface SaleItem {

@@ -58,7 +58,7 @@ export const useStore = create<Store>()(
         set((s) => ({ sales: s.sales.filter((x) => x.id !== id) })),
     }),
     {
-      name: 'ac-cafe-store',
+      name: 'ac-cafe-store-v2',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

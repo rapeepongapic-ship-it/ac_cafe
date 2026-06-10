@@ -27,8 +27,8 @@ export function calcPlatformSummary(
   platform: Platform,
   menuItems: MenuItem[]
 ): PlatformSummary {
+  // รวม qty ต่อ menuItemId สำหรับ platform นี้
   const qtys: Record<string, number> = {};
-
   sales
     .filter((s) => s.platformId === platform.id)
     .forEach((s) =>
@@ -42,14 +42,17 @@ export function calcPlatformSummary(
     if (quantity === 0) continue;
     const menuItem = menuItems.find((m) => m.id === menuItemId);
     if (!menuItem) continue;
-    const platformPrice = platform.menuPrices.find(
-      (p) => p.menuItemId === menuItemId
+
+    // ราคาขายอ่านจาก menuItem.platformPrices
+    const platformPrice = menuItem.platformPrices.find(
+      (p) => p.platformId === platform.id
     );
     const pricePerCup = platformPrice?.pricePerCup ?? 0;
     const revenue = quantity * pricePerCup;
     const costDeduct = quantity * menuItem.costPerCup;
     const feeDeduct = Math.round(revenue * (platform.feePercent / 100));
     const profit = revenue - costDeduct - feeDeduct;
+
     rows.push({
       menuItemId,
       name: menuItem.name,

@@ -1,217 +1,464 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView,
-  StyleSheet,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput,
 } from 'react-native';
-import { format, getYear, getMonth } from 'date-fns';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { format, startOfMonth, endOfMonth, subDays, parseISO, isWithinInterval } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { useStore } from '../store/useStore';
 import { calcPlatformSummary, MenuRowData } from '../utils/calculations';
-import { colors, typography } from '../utils/theme';
+import { colors, radius, shadow, space } from '../utils/theme';
 
-const THAI_MONTHS = [
-  'มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
-  'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
+type QuickFilter = 'today' | 'week' | 'month' | 'last_month' | 'custom';
+
+const QUICK_FILTERS: { key: QuickFilter; label: string }[] = [
+  { key: 'today',      label: 'วันนี้'        },
+  { key: 'week',       label: '7 วัน'        },
+  { key: 'month',      label: 'เดือนนี้'     },
+  { key: 'last_month', label: 'เดือนที่แล้ว' },
+  { key: 'custom',     label: 'กำหนดเอง'     },
 ];
+
+function getDateRange(filter: QuickFilter, customFrom: string, customTo: string) {
+  const now = new Date();
+  switch (filter) {
+    case 'today':      return { from: new Date(format(now, 'yyyy-MM-dd')), to: new Date(format(now, 'yyyy-MM-dd') + 'T23:59:59') };
+    case 'week':       return { from: subDays(now, 6), to: now };
+    case 'month':      return { from: startOfMonth(now), to: endOfMonth(now) };
+    case 'last_month': { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return { from: startOfMonth(d), to: endOfMonth(d) }; }
+    case 'custom': {
+      try {
+        return {
+          from: customFrom ? parseISO(customFrom) : startOfMonth(now),
+          to:   customTo   ? new Date(customTo + 'T23:59:59') : endOfMonth(now),
+        };
+      } catch { return { from: startOfMonth(now), to: endOfMonth(now) }; }
+    }
+  }
+}
 
 export default function ReportScreen() {
   const { sales, platforms, menuItems } = useStore();
-  const now = new Date();
-  const [year, setYear] = useState(getYear(now));
-  const [month, setMonth] = useState(getMonth(now)); // 0-indexed
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('month');
+  const [customFrom, setCustomFrom] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [customTo,   setCustomTo]   = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
 
-  const filteredSales = sales.filter((s) => {
-    const d = new Date(s.date);
-    return getYear(d) === year && getMonth(d) === month;
-  });
+  const { from, to } = getDateRange(quickFilter, customFrom, customTo);
 
-  const summaries = platforms
-    .map((p) => calcPlatformSummary(filteredSales, p, menuItems))
-    .filter((s) => s.rows.length > 0);
+  const filteredSales = useMemo(() =>
+    sales.filter((s) => {
+      const d = parseISO(s.date);
+      const inRange = isWithinInterval(d, { start: from, end: to });
+      const inPlatform = platformFilter === 'all' || s.platformId === platformFilter;
+      return inRange && inPlatform;
+    }),
+    [sales, from, to, platformFilter]
+  );
 
-  const grandTotalQty = summaries.reduce((s, p) => s + p.totalQty, 0);
-  const grandRevenue = summaries.reduce((s, p) => s + p.totalRevenue, 0);
-  const grandCost = summaries.reduce((s, p) => s + p.totalCost, 0);
-  const grandFee = summaries.reduce((s, p) => s + p.totalFee, 0);
-  const grandProfit = summaries.reduce((s, p) => s + p.totalProfit, 0);
+  const activePlatforms = platformFilter === 'all' ? platforms : platforms.filter((p) => p.id === platformFilter);
 
-  const prevMonth = () => {
-    if (month === 0) { setMonth(11); setYear((y) => y - 1); }
-    else setMonth((m) => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 11) { setMonth(0); setYear((y) => y + 1); }
-    else setMonth((m) => m + 1);
-  };
+  const summaries = useMemo(() =>
+    activePlatforms
+      .map((p) => calcPlatformSummary(filteredSales, p, menuItems))
+      .filter((s) => s.rows.length > 0),
+    [filteredSales, activePlatforms, menuItems]
+  );
+
+  // Combined rows for "all" view
+  const combinedRows = useMemo(() => {
+    const merged: Record<string, { menuItemId: string; name: string; qty: number; revenue: number; cost: number; fee: number; profit: number }> = {};
+    summaries.forEach((s) => {
+      s.rows.forEach((row) => {
+        if (!merged[row.menuItemId]) {
+          merged[row.menuItemId] = { menuItemId: row.menuItemId, name: row.name, qty: 0, revenue: 0, cost: 0, fee: 0, profit: 0 };
+        }
+        merged[row.menuItemId].qty     += row.quantity;
+        merged[row.menuItemId].revenue += row.revenue;
+        merged[row.menuItemId].cost    += row.costDeduct;
+        merged[row.menuItemId].fee     += row.feeDeduct;
+        merged[row.menuItemId].profit  += row.profit;
+      });
+    });
+    return Object.values(merged);
+  }, [summaries]);
+
+  const grand = useMemo(() => ({
+    qty:     summaries.reduce((s, p) => s + p.totalQty, 0),
+    revenue: summaries.reduce((s, p) => s + p.totalRevenue, 0),
+    cost:    summaries.reduce((s, p) => s + p.totalCost, 0),
+    fee:     summaries.reduce((s, p) => s + p.totalFee, 0),
+    profit:  summaries.reduce((s, p) => s + p.totalProfit, 0),
+  }), [summaries]);
+
+  const hasData = summaries.length > 0;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={prevMonth} style={styles.navBtn}>
-          <Text style={styles.navBtnText}>‹</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.title}>รายการขายเดือน</Text>
-          <Text style={styles.subtitle}>{THAI_MONTHS[month]} {year + 543}</Text>
-        </View>
-        <TouchableOpacity onPress={nextMonth} style={styles.navBtn}>
-          <Text style={styles.navBtnText}>›</Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 90 }}>
 
-      {summaries.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyIcon}>📊</Text>
-          <Text style={styles.emptyText}>ไม่มีข้อมูลการขายในเดือนนี้</Text>
-          <Text style={styles.emptySubText}>กรอกยอดขายที่แท็บ บันทึกยอดขาย</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>รายงาน</Text>
         </View>
-      ) : (
-        <>
-          {summaries.map((summary) => (
-            <PlatformTable key={summary.platform.id} summary={summary} />
-          ))}
 
-          {/* Grand total */}
-          {summaries.length > 1 && (
-            <View style={styles.grandCard}>
-              <Text style={styles.grandTitle}>รวมทั้งหมด</Text>
-              <View style={styles.grandRow}>
-                <GrandStat label="แก้วรวม" value={`${grandTotalQty} แก้ว`} />
-                <GrandStat label="รายได้รวม" value={`${grandRevenue.toLocaleString()} ฿`} />
+        {/* Date filters */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ช่วงเวลา</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {QUICK_FILTERS.map((f) => (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.chip, quickFilter === f.key && styles.chipActive]}
+                onPress={() => setQuickFilter(f.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.chipText, quickFilter === f.key && styles.chipTextActive]}>{f.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {quickFilter === 'custom' && (
+            <View style={styles.customDateRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>จาก</Text>
+                <TextInput style={styles.dateInput} value={customFrom} onChangeText={setCustomFrom} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
               </View>
-              <View style={styles.grandRow}>
-                <GrandStat label="หักต้นทุนรวม" value={`-${grandCost.toLocaleString()} ฿`} neg />
-                <GrandStat label="หักค่าธรรมเนียมรวม" value={`-${grandFee.toLocaleString()} ฿`} neg />
-              </View>
-              <View style={[styles.grandProfitRow]}>
-                <Text style={styles.grandProfitLabel}>กำไรสุทธิ</Text>
-                <Text style={[styles.grandProfitValue, grandProfit < 0 && { color: colors.danger }]}>
-                  {grandProfit.toLocaleString()} ฿
-                </Text>
+              <Ionicons name="arrow-forward" size={16} color={colors.textMuted} style={{ marginTop: 22, marginHorizontal: 8 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>ถึง</Text>
+                <TextInput style={styles.dateInput} value={customTo} onChangeText={setCustomTo} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
               </View>
             </View>
           )}
-        </>
-      )}
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
-  );
-}
-
-function GrandStat({ label, value, neg }: { label: string; value: string; neg?: boolean }) {
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={styles.grandStatLabel}>{label}</Text>
-      <Text style={[styles.grandStatValue, neg && { color: colors.danger }]}>{value}</Text>
-    </View>
-  );
-}
-
-function PlatformTable({ summary }: { summary: ReturnType<typeof calcPlatformSummary> }) {
-  const { platform, rows, totalQty, totalRevenue, totalCost, totalFee, totalProfit } = summary;
-  return (
-    <View style={styles.section}>
-      <Text style={styles.platformName}>{platform.name}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View>
-          {/* Table header */}
-          <View style={[styles.tableRow, styles.tableHeader]}>
-            <Cell w={120} header>เมนู</Cell>
-            <Cell w={60} header>ราคา/แก้ว</Cell>
-            <Cell w={60} header>ต้นทุน/แก้ว</Cell>
-            <Cell w={55} header>ขายได้</Cell>
-            <Cell w={75} header>จำนวนเงิน</Cell>
-            <Cell w={70} header>หักต้นทุน</Cell>
-            <Cell w={90} header>{platform.feeLabel}</Cell>
-            <Cell w={80} header>กำไรคงเหลือ</Cell>
-          </View>
-          {/* Data rows */}
-          {rows.map((row) => (
-            <DataRow key={row.menuItemId} row={row} />
-          ))}
-          {/* Summary row */}
-          <View style={[styles.tableRow, styles.summaryRow]}>
-            <Cell w={120} bold>สรุป</Cell>
-            <Cell w={60} />
-            <Cell w={60} />
-            <Cell w={55} bold>{totalQty}</Cell>
-            <Cell w={75} bold>{totalRevenue.toLocaleString()}</Cell>
-            <Cell w={70} bold neg>-{totalCost.toLocaleString()}</Cell>
-            <Cell w={90} bold neg>{totalFee > 0 ? `-${totalFee.toLocaleString()}` : '-'}</Cell>
-            <Cell w={80} bold profit={totalProfit}>{totalProfit.toLocaleString()}</Cell>
+          <View style={styles.dateRangeRow}>
+            <Ionicons name="calendar-outline" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
+            <Text style={styles.dateRangeText}>
+              {format(from, 'd MMM', { locale: th })} – {format(to, 'd MMM yyyy', { locale: th })}
+            </Text>
           </View>
         </View>
+
+        {/* Platform filter */}
+        {platforms.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>แพลตฟอร์ม</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[styles.chip, platformFilter === 'all' && styles.chipActive]}
+                onPress={() => setPlatformFilter('all')} activeOpacity={0.8}
+              >
+                <Ionicons name={platformFilter === 'all' ? 'layers' : 'layers-outline'} size={12} color={platformFilter === 'all' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={[styles.chipText, platformFilter === 'all' && styles.chipTextActive]}>ทั้งหมด</Text>
+              </TouchableOpacity>
+              {platforms.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.chip, platformFilter === p.id && styles.chipActive]}
+                  onPress={() => setPlatformFilter(p.id)} activeOpacity={0.8}
+                >
+                  <Ionicons name={platformFilter === p.id ? 'storefront' : 'storefront-outline'} size={12} color={platformFilter === p.id ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
+                  <Text style={[styles.chipText, platformFilter === p.id && styles.chipTextActive]}>{p.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 3 top stat cards */}
+        <View style={styles.statRow}>
+          <StatCard icon="cash-outline"       label="รายได้รวม" value={grand.revenue} suffix="฿" />
+          <StatCard icon="cafe-outline"        label="แก้วรวม"   value={grand.qty}     suffix="แก้ว" />
+          <StatCard icon="trending-up-outline" label="กำไรสุทธิ" value={grand.profit}  suffix="฿" profit={grand.profit} />
+        </View>
+
+        {/* Table content */}
+        {!hasData ? (
+          <EmptyState />
+        ) : platformFilter === 'all' ? (
+          <CombinedSection rows={combinedRows} grand={grand} />
+        ) : (
+          summaries.map((summary) => (
+            <PlatformSection key={summary.platform.id} summary={summary} />
+          ))
+        )}
+
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-function DataRow({ row }: { row: MenuRowData }) {
-  return (
-    <View style={styles.tableRow}>
-      <Cell w={120}>{row.name}</Cell>
-      <Cell w={60}>{row.pricePerCup}</Cell>
-      <Cell w={60}>{row.costPerCup}</Cell>
-      <Cell w={55}>{row.quantity}</Cell>
-      <Cell w={75}>{row.revenue.toLocaleString()}</Cell>
-      <Cell w={70} neg>-{row.costDeduct.toLocaleString()}</Cell>
-      <Cell w={90} neg>{row.feeDeduct > 0 ? `-${row.feeDeduct.toLocaleString()}` : '-'}</Cell>
-      <Cell w={80} profit={row.profit}>{row.profit.toLocaleString()}</Cell>
-    </View>
-  );
-}
+// ─── Combined section (ทั้งหมด) ───────────────────────────────────────────────
 
-function Cell({
-  children, w, header, bold, neg, profit,
-}: {
-  children?: React.ReactNode;
-  w: number;
-  header?: boolean;
-  bold?: boolean;
-  neg?: boolean;
-  profit?: number;
+function CombinedSection({ rows, grand }: {
+  rows: { menuItemId: string; name: string; qty: number; revenue: number; cost: number; fee: number; profit: number }[];
+  grand: { qty: number; revenue: number; cost: number; fee: number; profit: number };
 }) {
-  const textStyle: any[] = [styles.cellText];
-  if (header) textStyle.push(styles.cellHeader);
-  if (bold) textStyle.push({ fontWeight: '700' as const });
-  if (neg) textStyle.push({ color: colors.danger });
-  if (profit !== undefined && profit > 0) textStyle.push({ color: colors.success });
-  if (profit !== undefined && profit < 0) textStyle.push({ color: colors.danger });
+  const hasFee = grand.fee > 0;
   return (
-    <View style={[styles.cell, { width: w }, header && styles.cellHeaderBg]}>
-      <Text style={textStyle} numberOfLines={2}>{children ?? ''}</Text>
+    <View style={styles.platformBlock}>
+      {/* Section header */}
+      <View style={styles.platformHeaderRow}>
+        <View style={styles.platformHeaderLeft}>
+          <Ionicons name="layers" size={15} color={colors.accent} style={{ marginRight: 6 }} />
+          <Text style={styles.platformTitle}>ทุก Platform</Text>
+        </View>
+        <View style={styles.qtyBadge}>
+          <Text style={styles.qtyBadgeText}>{grand.qty} แก้ว</Text>
+        </View>
+      </View>
+
+      {/* Column header */}
+      <ColumnHeader hasFee={hasFee} feeLabel="ค่าธรรมเนียม" />
+
+      {/* Menu rows */}
+      {rows.map((row, i) => (
+        <CombinedMenuRow key={row.menuItemId} row={row} hasFee={hasFee} isLast={i === rows.length - 1} />
+      ))}
+
+      {/* Summary row */}
+      <SummaryRow
+        hasFee={hasFee}
+        qty={grand.qty} revenue={grand.revenue} cost={grand.cost} fee={grand.fee} profit={grand.profit}
+        margin={grand.revenue > 0 ? Math.round((grand.profit / grand.revenue) * 100) : 0}
+      />
+    </View>
+  );
+}
+
+// ─── Per-platform section ─────────────────────────────────────────────────────
+
+function PlatformSection({ summary }: { summary: ReturnType<typeof calcPlatformSummary> }) {
+  const { platform, rows, totalQty, totalRevenue, totalCost, totalFee, totalProfit } = summary;
+  const hasFee = platform.feePercent > 0;
+  const margin = totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0;
+  return (
+    <View style={styles.platformBlock}>
+      {/* Section header */}
+      <View style={styles.platformHeaderRow}>
+        <View style={styles.platformHeaderLeft}>
+          <Ionicons name="storefront" size={15} color={colors.accent} style={{ marginRight: 6 }} />
+          <Text style={styles.platformTitle}>{platform.name}</Text>
+          {hasFee && (
+            <View style={styles.feeBadge}>
+              <Text style={styles.feeBadgeText}>หัก {platform.feePercent}%</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.qtyBadge}>
+          <Text style={styles.qtyBadgeText}>{totalQty} แก้ว</Text>
+        </View>
+      </View>
+
+      {/* Column header */}
+      <ColumnHeader hasFee={hasFee} feeLabel={hasFee ? `หัก ${platform.feePercent}%` : ''} />
+
+      {/* Menu rows */}
+      {rows.map((row, i) => (
+        <MenuItemRow key={row.menuItemId} row={row} hasFee={hasFee} isLast={i === rows.length - 1} />
+      ))}
+
+      {/* Summary row */}
+      <SummaryRow
+        hasFee={hasFee}
+        qty={totalQty} revenue={totalRevenue} cost={totalCost} fee={totalFee} profit={totalProfit}
+        margin={margin}
+      />
+    </View>
+  );
+}
+
+// ─── Table sub-components ─────────────────────────────────────────────────────
+
+function ColumnHeader({ hasFee, feeLabel }: { hasFee: boolean; feeLabel: string }) {
+  return (
+    <View style={[styles.tableRow, styles.colHeaderRow]}>
+      <Text style={[styles.colHeader, { flex: 2.2 }]}>เมนู</Text>
+      <Text style={[styles.colHeader, styles.colRight, { flex: 0.9 }]}>แก้ว</Text>
+      <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>รายได้</Text>
+      <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>หักต้นทุน</Text>
+      {hasFee && <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>{feeLabel}</Text>}
+      <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>กำไร</Text>
+    </View>
+  );
+}
+
+function MenuItemRow({ row, hasFee, isLast }: { row: MenuRowData; hasFee: boolean; isLast: boolean }) {
+  return (
+    <View style={[styles.tableRow, styles.dataRow, isLast && styles.lastDataRow]}>
+      <Text style={[styles.cellName, { flex: 2.2 }]} numberOfLines={2}>{row.name}</Text>
+      <Text style={[styles.cellNum, { flex: 0.9 }]}>{row.quantity}</Text>
+      <Text style={[styles.cellNum, { flex: 1.5 }]}>{row.revenue.toLocaleString()}</Text>
+      <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
+        {row.costDeduct > 0 ? `-${row.costDeduct.toLocaleString()}` : '–'}
+      </Text>
+      {hasFee && (
+        <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
+          {row.feeDeduct > 0 ? `-${row.feeDeduct.toLocaleString()}` : '–'}
+        </Text>
+      )}
+      <Text style={[styles.cellNum, row.profit > 0 ? styles.cellProfit : row.profit < 0 ? styles.cellNeg : null, { flex: 1.5 }]}>
+        {row.profit.toLocaleString()}
+      </Text>
+    </View>
+  );
+}
+
+function CombinedMenuRow({ row, hasFee, isLast }: {
+  row: { menuItemId: string; name: string; qty: number; revenue: number; cost: number; fee: number; profit: number };
+  hasFee: boolean; isLast: boolean;
+}) {
+  return (
+    <View style={[styles.tableRow, styles.dataRow, isLast && styles.lastDataRow]}>
+      <Text style={[styles.cellName, { flex: 2.2 }]} numberOfLines={2}>{row.name}</Text>
+      <Text style={[styles.cellNum, { flex: 0.9 }]}>{row.qty}</Text>
+      <Text style={[styles.cellNum, { flex: 1.5 }]}>{row.revenue.toLocaleString()}</Text>
+      <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
+        {row.cost > 0 ? `-${row.cost.toLocaleString()}` : '–'}
+      </Text>
+      {hasFee && (
+        <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
+          {row.fee > 0 ? `-${row.fee.toLocaleString()}` : '–'}
+        </Text>
+      )}
+      <Text style={[styles.cellNum, row.profit > 0 ? styles.cellProfit : row.profit < 0 ? styles.cellNeg : null, { flex: 1.5 }]}>
+        {row.profit.toLocaleString()}
+      </Text>
+    </View>
+  );
+}
+
+function SummaryRow({ hasFee, qty, revenue, cost, fee, profit, margin }: {
+  hasFee: boolean; qty: number; revenue: number; cost: number; fee: number; profit: number; margin: number;
+}) {
+  return (
+    <View style={styles.summaryRow}>
+      <View style={styles.summaryLeft}>
+        <Text style={styles.summaryLabel}>สรุป</Text>
+        <Text style={styles.summaryQty}>{qty} แก้ว</Text>
+      </View>
+      <View style={styles.summaryRight}>
+        <SummaryPill label="รายได้" value={revenue} />
+        <SummaryPill label="หักต้นทุน" value={-cost} neg />
+        {hasFee && fee > 0 && <SummaryPill label="ค่าธรรมเนียม" value={-fee} neg />}
+        <SummaryPill label="กำไร" value={profit} profit={profit} />
+      </View>
+      {revenue > 0 && (
+        <View style={styles.marginRow}>
+          <Text style={styles.marginText}>Margin {margin}%</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SummaryPill({ label, value, neg, profit }: { label: string; value: number; neg?: boolean; profit?: number }) {
+  const textColor = profit !== undefined
+    ? (profit > 0 ? colors.success : profit < 0 ? colors.danger : colors.text)
+    : neg ? colors.danger : colors.text;
+  return (
+    <View style={styles.summaryPill}>
+      <Text style={styles.summaryPillLabel}>{label}</Text>
+      <Text style={[styles.summaryPillValue, { color: textColor }]}>
+        {value >= 0 ? '' : ''}{value.toLocaleString()} ฿
+      </Text>
+    </View>
+  );
+}
+
+function StatCard({ icon, label, value, suffix, profit }: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string; value: number; suffix: string; profit?: number;
+}) {
+  const valueColor = profit !== undefined
+    ? (profit > 0 ? colors.success : profit < 0 ? colors.danger : colors.text)
+    : colors.text;
+  return (
+    <View style={styles.statCard}>
+      <Ionicons name={icon} size={16} color={colors.accent} style={{ marginBottom: 4 }} />
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color: valueColor }]}>
+        {value.toLocaleString()} <Text style={styles.statSuffix}>{suffix}</Text>
+      </Text>
+    </View>
+  );
+}
+
+function EmptyState() {
+  return (
+    <View style={styles.emptyBox}>
+      <View style={styles.emptyIconWrap}>
+        <Ionicons name="bar-chart-outline" size={40} color={colors.textMuted} />
+      </View>
+      <Text style={styles.emptyTitle}>ไม่มีข้อมูลการขาย</Text>
+      <Text style={styles.emptySubtitle}>ในช่วงเวลาและ platform ที่เลือก</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingTop: 16, paddingBottom: 12 },
-  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  navBtnText: { fontSize: 28, color: colors.accent, fontWeight: '300' },
-  title: { ...typography.heading, textAlign: 'center', fontSize: 18 },
-  subtitle: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 2 },
-  emptyBox: { alignItems: 'center', marginTop: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 6 },
-  emptySubText: { fontSize: 13, color: colors.textMuted },
-  section: { marginHorizontal: 16, marginBottom: 24 },
-  platformName: { fontSize: 18, fontWeight: '700', color: colors.accent, marginBottom: 8 },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
-  tableHeader: { backgroundColor: colors.tableHeader },
-  summaryRow: { backgroundColor: colors.summaryRow },
-  cell: { padding: 8, justifyContent: 'center', borderRightWidth: 1, borderRightColor: colors.border },
-  cellHeaderBg: { backgroundColor: colors.tableHeader },
-  cellText: { fontSize: 13, color: colors.text },
-  cellHeader: { fontWeight: '700', fontSize: 12, color: colors.textSecondary },
-  grandCard: { marginHorizontal: 16, backgroundColor: colors.bgCard, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 16 },
-  grandTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  grandRow: { flexDirection: 'row', marginBottom: 10, gap: 16 },
-  grandStatLabel: { fontSize: 12, color: colors.textMuted, marginBottom: 2 },
-  grandStatValue: { fontSize: 16, fontWeight: '700', color: colors.text },
-  grandProfitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, marginTop: 4 },
-  grandProfitLabel: { fontSize: 15, fontWeight: '700', color: colors.text },
-  grandProfitValue: { fontSize: 20, fontWeight: '800', color: colors.success },
+  header: { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.xs },
+  title: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
+  section: { paddingHorizontal: space.md, marginBottom: space.md },
+  sectionLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 },
+
+  // Filters
+  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.bgCard, marginRight: 8, borderWidth: 1, borderColor: colors.border },
+  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  chipTextActive: { color: '#fff' },
+  customDateRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 10 },
+  inputLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 },
+  dateInput: { backgroundColor: colors.bgCard, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.text, borderWidth: 1, borderColor: colors.border },
+  dateRangeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 7 },
+  dateRangeText: { fontSize: 12, color: colors.textMuted },
+
+  // Stat cards
+  statRow: { flexDirection: 'row', paddingHorizontal: space.md, gap: space.sm, marginBottom: space.md },
+  statCard: { flex: 1, backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: colors.border, ...shadow.sm },
+  statLabel: { fontSize: 10, color: colors.textMuted, textAlign: 'center', marginBottom: 2 },
+  statValue: { fontSize: 14, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  statSuffix: { fontSize: 11, fontWeight: '400', color: colors.textMuted },
+
+  // Platform block
+  platformBlock: { marginHorizontal: space.md, marginBottom: space.lg, backgroundColor: colors.bgCard, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', ...shadow.sm },
+  platformHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.bgSection },
+  platformHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  platformTitle: { fontSize: 15, fontWeight: '700', color: colors.accent },
+  feeBadge: { marginLeft: 8, backgroundColor: colors.bgInput, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
+  feeBadgeText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  qtyBadge: { backgroundColor: colors.bgCard, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
+  qtyBadgeText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+
+  // Table rows
+  tableRow: { flexDirection: 'row', alignItems: 'center' },
+  colHeaderRow: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.tableHeader, borderBottomWidth: 1, borderBottomColor: colors.border },
+  colHeader: { fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
+  colRight: { textAlign: 'right' },
+  dataRow: { paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  lastDataRow: { borderBottomWidth: 0 },
+  cellName: { fontSize: 13, fontWeight: '600', color: colors.text, paddingRight: 6 },
+  cellNum: { fontSize: 13, color: colors.text, textAlign: 'right', fontVariant: ['tabular-nums'] as any },
+  cellNeg: { color: colors.danger },
+  cellProfit: { color: colors.success, fontWeight: '700' },
+
+  // Summary row
+  summaryRow: { backgroundColor: colors.summaryRow, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
+  summaryLeft: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  summaryLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginRight: 8 },
+  summaryQty: { fontSize: 12, color: colors.textMuted },
+  summaryRight: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  summaryPill: { backgroundColor: colors.bgCard, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  summaryPillLabel: { fontSize: 10, color: colors.textMuted, marginBottom: 1 },
+  summaryPillValue: { fontSize: 13, fontWeight: '700', color: colors.text },
+  marginRow: { marginTop: 8 },
+  marginText: { fontSize: 11, color: colors.textMuted },
+
+  // Empty
+  emptyBox: { alignItems: 'center', paddingTop: 40 },
+  emptyIconWrap: { width: 72, height: 72, borderRadius: radius.full, backgroundColor: colors.bgInput, alignItems: 'center', justifyContent: 'center', marginBottom: space.md, borderWidth: 1, borderColor: colors.border },
+  emptyTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 6 },
+  emptySubtitle: { fontSize: 13, color: colors.textMuted },
 });
