@@ -1,9 +1,8 @@
 import { useState, useMemo, useRef } from 'react'
 import { format, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval } from 'date-fns'
 import { th } from 'date-fns/locale'
-import { Plus, Trash2, Camera, X, ShoppingCart, Package, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, Camera, X, ShoppingCart, Package, ChevronDown, ChevronUp, Receipt } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { supabase } from '../lib/supabase'
 
 type PeriodFilter = 'this_month' | 'last_month' | 'custom'
 
@@ -28,31 +27,41 @@ function getRange(filter: PeriodFilter, customFrom: string, customTo: string) {
 
 const fmt = (n: number) => n.toLocaleString()
 const today = format(new Date(), 'yyyy-MM-dd')
+const uid = () => crypto.randomUUID()
+
+type TripItem = { rowId: string; ingredientId: string; amount: string }
 
 export default function ExpenseScreen() {
-  const { ingredients, expenseEntries, userId, addIngredient, deleteIngredient, addExpenseEntry, deleteExpenseEntry } = useStore()
+  const { ingredients, expenseEntries, expenseSessions, userId, addIngredient, deleteIngredient, addExpenseSession, deleteExpenseSession } = useStore()
 
-  const [tab, setTab]             = useState<'entries' | 'ingredients'>('entries')
+  const [tab, setTab] = useState<'entries' | 'ingredients'>('entries')
   const [filter, setFilter]       = useState<PeriodFilter>('this_month')
   const [customFrom, setCustomFrom] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [customTo, setCustomTo]     = useState(today)
 
-  // Add entry state
-  const [addingFor, setAddingFor]         = useState<string | null>(null)
-  const [entryDate, setEntryDate]         = useState(today)
-  const [entryAmount, setEntryAmount]     = useState('')
-  const [entryNote, setEntryNote]         = useState('')
-  const [entryPhoto, setEntryPhoto]       = useState<File | null>(null)
-  const [entryPreview, setEntryPreview]   = useState<string | null>(null)
-  const [saving, setSaving]               = useState(false)
-  const [expanded, setExpanded]           = useState<Record<string, boolean>>({})
-  const fileInputRef                       = useRef<HTMLInputElement>(null)
+  // Trip form state
+  const [tripDate, setTripDate]       = useState(today)
+  const [tripNote, setTripNote]       = useState('')
+  const [tripPhoto, setTripPhoto]     = useState<File | null>(null)
+  const [tripPreview, setTripPreview] = useState<string | null>(null)
+  const [tripItems, setTripItems]     = useState<TripItem[]>([{ rowId: uid(), ingredientId: '', amount: '' }])
+  const [saving, setSaving]           = useState(false)
+  const [expanded, setExpanded]       = useState<Record<string, boolean>>({})
+  const fileInputRef                   = useRef<HTMLInputElement>(null)
 
   // Add ingredient state
-  const [newName, setNewName] = useState('')
+  const [newName, setNewName]   = useState('')
   const [addingIng, setAddingIng] = useState(false)
 
   const { from, to } = getRange(filter, customFrom, customTo)
+
+  const filteredSessions = useMemo(() =>
+    expenseSessions.filter(s => {
+      try { return isWithinInterval(parseISO(s.date), { start: from, end: to }) }
+      catch { return false }
+    }),
+    [expenseSessions, from, to]
+  )
 
   const filteredEntries = useMemo(() =>
     expenseEntries.filter(e => {
@@ -64,55 +73,53 @@ export default function ExpenseScreen() {
 
   const totalExpense = filteredEntries.reduce((s, e) => s + e.amount, 0)
 
-  const openAdd = (ingredientId: string) => {
-    setAddingFor(ingredientId)
-    setEntryDate(today)
-    setEntryAmount('')
-    setEntryNote('')
-    setEntryPhoto(null)
-    setEntryPreview(null)
-  }
+  // Trip form helpers
+  const addRow = () =>
+    setTripItems(prev => [...prev, { rowId: uid(), ingredientId: '', amount: '' }])
 
-  const closeAdd = () => {
-    setAddingFor(null)
-    setEntryPhoto(null)
-    setEntryPreview(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
+  const removeRow = (rowId: string) =>
+    setTripItems(prev => prev.length > 1 ? prev.filter(r => r.rowId !== rowId) : prev)
+
+  const updateRow = (rowId: string, field: 'ingredientId' | 'amount', val: string) =>
+    setTripItems(prev => prev.map(r => r.rowId === rowId ? { ...r, [field]: val } : r))
+
+  const tripTotal = tripItems.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
+
+  const validItems = tripItems.filter(r => r.ingredientId && parseFloat(r.amount) > 0)
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setEntryPhoto(file)
-    setEntryPreview(URL.createObjectURL(file))
+    setTripPhoto(file)
+    setTripPreview(URL.createObjectURL(file))
+  }
+
+  const clearPhoto = () => {
+    setTripPhoto(null)
+    setTripPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const resetForm = () => {
+    setTripDate(today)
+    setTripNote('')
+    setTripPhoto(null)
+    setTripPreview(null)
+    setTripItems([{ rowId: uid(), ingredientId: '', amount: '' }])
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleSave = async () => {
-    if (!addingFor || !entryAmount || !userId) return
-    const amount = parseFloat(entryAmount)
-    if (isNaN(amount) || amount <= 0) return
+    if (!userId || validItems.length === 0) return
     setSaving(true)
-
-    let photoUrl: string | null = null
-    if (entryPhoto) {
-      const ext = entryPhoto.name.split('.').pop() || 'jpg'
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`
-      const { error } = await supabase.storage.from('expense-photos').upload(path, entryPhoto)
-      if (!error) {
-        photoUrl = supabase.storage.from('expense-photos').getPublicUrl(path).data.publicUrl
-      }
-    }
-
-    await addExpenseEntry({
-      ingredientId: addingFor,
-      date: entryDate,
-      amount,
-      photoUrl,
-      note: entryNote.trim() || null,
+    await addExpenseSession({
+      date: tripDate,
+      note: tripNote.trim() || null,
+      photo: tripPhoto,
+      items: validItems.map(r => ({ ingredientId: r.ingredientId, amount: parseFloat(r.amount) })),
     })
-
+    resetForm()
     setSaving(false)
-    closeAdd()
   }
 
   const handleAddIngredient = async () => {
@@ -127,11 +134,15 @@ export default function ExpenseScreen() {
   const toggleExpand = (id: string) =>
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
 
+  const ingName = (id: string) => ingredients.find(i => i.id === id)?.name ?? '?'
+
   const PERIODS: { key: PeriodFilter; label: string }[] = [
     { key: 'this_month', label: 'เดือนนี้' },
     { key: 'last_month', label: 'เดือนที่แล้ว' },
     { key: 'custom',     label: 'กำหนดเอง' },
   ]
+
+  const inputCls = 'bg-cafe-card border border-cafe-border rounded-xl px-3 py-2.5 text-sm text-cafe-text outline-none focus:border-cafe-accent transition-colors'
 
   return (
     <div className="p-4 lg:px-8 lg:py-6 pb-8 space-y-4 lg:space-y-5">
@@ -159,7 +170,134 @@ export default function ExpenseScreen() {
       {/* ── ENTRIES TAB ─────────────────────────────────────────────────── */}
       {tab === 'entries' && (
         <>
-          {/* Period filter */}
+          {/* ── Trip form ─── */}
+          {ingredients.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Package size={48} className="mb-4 text-cafe-border" />
+              <p className="text-cafe-text-2 font-semibold mb-1">ยังไม่มีวัตถุดิบ</p>
+              <p className="text-cafe-muted text-sm mb-4">เพิ่มวัตถุดิบก่อนบันทึกรายจ่าย</p>
+              <button
+                onClick={() => setTab('ingredients')}
+                className="px-4 py-2.5 bg-cafe-accent text-white rounded-xl text-sm font-bold cursor-pointer"
+              >
+                ไปเพิ่มวัตถุดิบ
+              </button>
+            </div>
+          ) : (
+            <div className="bg-cafe-card border border-cafe-border rounded-xl shadow-sm overflow-hidden">
+              {/* Form header */}
+              <div className="flex items-center gap-2 px-4 py-3 bg-cafe-section border-b border-cafe-border">
+                <Receipt size={15} className="text-cafe-accent" />
+                <span className="text-sm font-bold text-cafe-text">บันทึกการซื้อ</span>
+              </div>
+
+              <div className="p-4 space-y-3">
+                {/* Date + Note row */}
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={tripDate}
+                    onChange={e => setTripDate(e.target.value)}
+                    className={`${inputCls} flex-1`}
+                  />
+                  <input
+                    type="text"
+                    value={tripNote}
+                    onChange={e => setTripNote(e.target.value)}
+                    placeholder="โน้ต (เช่น ตลาดสด)"
+                    className={`${inputCls} flex-1`}
+                  />
+                </div>
+
+                {/* Ingredient rows */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">รายการที่ซื้อ</p>
+                  {tripItems.map((row, i) => (
+                    <div key={row.rowId} className="flex gap-2 items-center">
+                      <select
+                        value={row.ingredientId}
+                        onChange={e => updateRow(row.rowId, 'ingredientId', e.target.value)}
+                        className={`${inputCls} flex-1 min-w-0`}
+                      >
+                        <option value="">เลือกวัตถุดิบ</option>
+                        {ingredients.map(ing => (
+                          <option key={ing.id} value={ing.id}>{ing.name}</option>
+                        ))}
+                      </select>
+                      <div className="relative w-28 shrink-0">
+                        <input
+                          type="number"
+                          value={row.amount}
+                          onChange={e => updateRow(row.rowId, 'amount', e.target.value)}
+                          placeholder="ราคา"
+                          className={`${inputCls} w-full pr-6`}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-cafe-muted">฿</span>
+                      </div>
+                      <button
+                        onClick={() => removeRow(row.rowId)}
+                        disabled={tripItems.length === 1 && i === 0}
+                        className="p-2 text-red-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer shrink-0"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={addRow}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-cafe-accent hover:text-cafe-accent-dark transition-colors cursor-pointer py-1"
+                  >
+                    <Plus size={14} />
+                    เพิ่มรายการ
+                  </button>
+                </div>
+
+                {/* Photo + total row */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-1.5 cursor-pointer px-3 py-2 border border-cafe-border rounded-xl text-xs font-semibold text-cafe-text-2 bg-cafe-input hover:bg-cafe-section transition-colors">
+                    <Camera size={13} className="text-cafe-accent" />
+                    {tripPreview ? 'เปลี่ยนสลิป' : 'แนบสลิป'}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {tripPreview && (
+                    <div className="relative shrink-0">
+                      <img src={tripPreview} alt="slip" className="w-10 h-10 rounded-lg object-cover border border-cafe-border" />
+                      <button
+                        onClick={clearPhoto}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
+                      >
+                        <X size={8} className="text-white" />
+                      </button>
+                    </div>
+                  )}
+                  {tripTotal > 0 && (
+                    <div className="ml-auto text-right">
+                      <p className="text-[10px] text-cafe-muted font-semibold">รวม</p>
+                      <p className="text-base font-bold text-red-600">{fmt(tripTotal)} ฿</p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleSave}
+                  disabled={saving || validItems.length === 0}
+                  className="w-full bg-cafe-accent hover:bg-cafe-accent-dark text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {saving ? 'กำลังบันทึก...' : `บันทึก${validItems.length > 0 ? ` (${validItems.length} รายการ)` : ''}`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Period filter ─── */}
           <div className="space-y-2">
             <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">ช่วงเวลา</p>
             <div className="flex flex-wrap gap-2">
@@ -179,198 +317,96 @@ export default function ExpenseScreen() {
             </div>
             {filter === 'custom' && (
               <div className="flex gap-2 items-center">
-                <input type="text" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                  placeholder="YYYY-MM-DD"
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
                   className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none focus:border-cafe-accent" />
                 <span className="text-cafe-muted text-sm">→</span>
-                <input type="text" value={customTo} onChange={e => setCustomTo(e.target.value)}
-                  placeholder="YYYY-MM-DD"
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
                   className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none focus:border-cafe-accent" />
               </div>
             )}
           </div>
 
-          {/* Total card */}
+          {/* ── Total summary ─── */}
           {filteredEntries.length > 0 && (
-            <div className="bg-cafe-card border border-cafe-border rounded-xl px-4 lg:px-5 py-3 lg:py-4 flex items-center gap-3 shadow-sm">
+            <div className="bg-cafe-card border border-cafe-border rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
               <div className="flex-1">
                 <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-wide mb-1">รายจ่ายรวม</p>
                 <p className="text-2xl lg:text-3xl font-bold text-red-600">{fmt(totalExpense)} ฿</p>
               </div>
               <div className="text-right text-xs text-cafe-muted space-y-0.5">
+                <p>{filteredSessions.length} ครั้งที่ซื้อ</p>
                 <p>{filteredEntries.length} รายการ</p>
-                <p>{ingredients.filter(i => filteredEntries.some(e => e.ingredientId === i.id)).length} วัตถุดิบ</p>
               </div>
             </div>
           )}
 
-          {/* No ingredients */}
-          {ingredients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Package size={48} className="mb-4 text-cafe-border" />
-              <p className="text-cafe-text-2 font-semibold mb-1">ยังไม่มีวัตถุดิบ</p>
-              <p className="text-cafe-muted text-sm mb-4">เพิ่มวัตถุดิบก่อนบันทึกรายจ่าย</p>
-              <button
-                onClick={() => setTab('ingredients')}
-                className="px-4 py-2.5 bg-cafe-accent text-white rounded-xl text-sm font-bold cursor-pointer"
-              >
-                ไปเพิ่มวัตถุดิบ
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {ingredients.map(ingredient => {
-                const entries  = filteredEntries.filter(e => e.ingredientId === ingredient.id)
-                const total    = entries.reduce((s, e) => s + e.amount, 0)
-                const isAdding = addingFor === ingredient.id
-                const isOpen   = expanded[ingredient.id] ?? false
-
+          {/* ── Session history ─── */}
+          {filteredSessions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">ประวัติการซื้อ</p>
+              {filteredSessions.map(session => {
+                const total   = session.items.reduce((s, i) => s + i.amount, 0)
+                const isOpen  = expanded[session.id] ?? false
                 return (
-                  <div key={ingredient.id} className="bg-cafe-card border border-cafe-border rounded-xl overflow-hidden shadow-sm">
-
-                    {/* Card header */}
-                    <div className="flex items-center gap-2 px-4 py-3 bg-cafe-section border-b border-cafe-border">
-                      <Package size={14} className="text-cafe-accent shrink-0" />
-                      <span className="font-bold text-cafe-text flex-1 text-sm truncate">{ingredient.name}</span>
-                      {entries.length > 0 && (
-                        <>
-                          <span className="text-sm font-bold text-red-600 shrink-0">{fmt(total)} ฿</span>
-                          <span className="text-[10px] font-semibold text-cafe-muted bg-cafe-input border border-cafe-border rounded-full px-2 py-0.5 shrink-0">
-                            {entries.length} ครั้ง
-                          </span>
-                          <button
-                            onClick={() => toggleExpand(ingredient.id)}
-                            className="p-1 text-cafe-muted hover:text-cafe-text transition-colors cursor-pointer"
-                          >
-                            {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </button>
-                        </>
+                  <div key={session.id} className="bg-cafe-card border border-cafe-border rounded-xl overflow-hidden shadow-sm">
+                    {/* Session header */}
+                    <div className="flex items-center gap-2.5 px-4 py-3">
+                      {session.photoUrl ? (
+                        <a href={session.photoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                          <img src={session.photoUrl} alt="slip" className="w-9 h-9 rounded-lg object-cover border border-cafe-border" />
+                        </a>
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-cafe-section border border-cafe-border flex items-center justify-center shrink-0">
+                          <Receipt size={14} className="text-cafe-muted" />
+                        </div>
                       )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-bold text-cafe-text">{fmtDate(session.date)}</span>
+                          <span className="text-xs text-cafe-muted">{session.items.length} รายการ</span>
+                        </div>
+                        {session.note && (
+                          <p className="text-xs text-cafe-muted truncate">{session.note}</p>
+                        )}
+                      </div>
+                      <span className="text-sm font-bold text-red-600 shrink-0">{fmt(total)} ฿</span>
+                      <button
+                        onClick={() => toggleExpand(session.id)}
+                        className="p-1 text-cafe-muted hover:text-cafe-text transition-colors cursor-pointer"
+                      >
+                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                      <button
+                        onClick={() => { if (confirm('ลบการซื้อครั้งนี้ทั้งหมด?')) deleteExpenseSession(session.id) }}
+                        className="p-1 text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
 
-                    {/* Entry list (collapsible) */}
-                    {entries.length > 0 && isOpen && (
-                      <div className="divide-y divide-cafe-border-light">
-                        {entries.map(entry => (
-                          <div key={entry.id} className="flex items-center gap-3 px-4 py-2.5">
-                            {entry.photoUrl && (
-                              <a href={entry.photoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                                <img
-                                  src={entry.photoUrl}
-                                  alt="receipt"
-                                  className="w-10 h-10 rounded-lg object-cover border border-cafe-border"
-                                />
-                              </a>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-baseline gap-2">
-                                <span className="text-sm font-bold text-cafe-text">{fmt(entry.amount)} ฿</span>
-                                <span className="text-xs text-cafe-muted">{fmtDate(entry.date)}</span>
-                              </div>
-                              {entry.note && (
-                                <p className="text-xs text-cafe-muted truncate">{entry.note}</p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => { if (confirm('ลบรายการนี้?')) deleteExpenseEntry(entry.id) }}
-                              className="p-1.5 text-red-400 hover:text-red-600 transition-colors cursor-pointer"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                    {/* Items breakdown (expandable) */}
+                    {isOpen && (
+                      <div className="border-t border-cafe-border-light divide-y divide-cafe-border-light">
+                        {session.items.map(item => (
+                          <div key={item.id} className="flex items-center gap-2 px-4 py-2.5">
+                            <Package size={12} className="text-cafe-accent shrink-0" />
+                            <span className="flex-1 text-sm text-cafe-text">{ingName(item.ingredientId)}</span>
+                            <span className="text-sm font-semibold text-cafe-text-2">{fmt(item.amount)} ฿</span>
                           </div>
                         ))}
                       </div>
                     )}
-
-                    {/* Add entry form (inline) */}
-                    {isAdding ? (
-                      <div className="px-4 py-3 border-t border-cafe-border bg-cafe-section/50 space-y-2.5">
-                        <div className="flex gap-2">
-                          <input
-                            type="date"
-                            value={entryDate}
-                            onChange={e => setEntryDate(e.target.value)}
-                            className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none focus:border-cafe-accent"
-                          />
-                          <div className="relative flex-1">
-                            <input
-                              type="number"
-                              value={entryAmount}
-                              onChange={e => setEntryAmount(e.target.value)}
-                              placeholder="ราคา"
-                              autoFocus
-                              className="w-full bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 pr-7 text-sm text-cafe-text outline-none focus:border-cafe-accent"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-cafe-muted">฿</span>
-                          </div>
-                        </div>
-                        <input
-                          type="text"
-                          value={entryNote}
-                          onChange={e => setEntryNote(e.target.value)}
-                          placeholder="โน้ต (ไม่บังคับ) เช่น ซื้อจากตลาดสด"
-                          className="w-full bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none focus:border-cafe-accent"
-                        />
-
-                        {/* Photo upload */}
-                        <div className="flex items-center gap-2">
-                          <label className="flex items-center gap-1.5 cursor-pointer px-3 py-2 border border-cafe-border rounded-xl text-xs font-semibold text-cafe-text-2 bg-cafe-card hover:bg-cafe-section transition-colors">
-                            <Camera size={13} className="text-cafe-accent" />
-                            {entryPreview ? 'เปลี่ยนรูป' : 'แนบรูปใบเสร็จ'}
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              onChange={handlePhotoChange}
-                              className="hidden"
-                            />
-                          </label>
-                          {entryPreview && (
-                            <div className="relative">
-                              <img
-                                src={entryPreview}
-                                alt="preview"
-                                className="w-10 h-10 rounded-lg object-cover border border-cafe-border"
-                              />
-                              <button
-                                onClick={() => { setEntryPhoto(null); setEntryPreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
-                                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
-                              >
-                                <X size={8} className="text-white" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleSave}
-                            disabled={saving || !entryAmount}
-                            className="flex-1 bg-cafe-accent hover:bg-cafe-accent-dark text-white text-sm font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            {saving ? 'กำลังบันทึก...' : 'บันทึก'}
-                          </button>
-                          <button
-                            onClick={closeAdd}
-                            className="px-4 bg-cafe-card border border-cafe-border text-cafe-text-2 text-sm font-semibold py-2.5 rounded-xl hover:bg-cafe-section transition-colors cursor-pointer"
-                          >
-                            ยกเลิก
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => openAdd(ingredient.id)}
-                        className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 border-t border-cafe-border text-sm font-semibold text-cafe-accent hover:bg-cafe-section transition-colors cursor-pointer"
-                      >
-                        <Plus size={14} />
-                        บันทึกการซื้อ
-                      </button>
-                    )}
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {filteredSessions.length === 0 && ingredients.length > 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <ShoppingCart size={40} className="mb-3 text-cafe-border" />
+              <p className="font-semibold text-cafe-text-2 mb-1">ยังไม่มีรายการซื้อ</p>
+              <p className="text-sm text-cafe-muted">บันทึกการซื้อวัตถุดิบด้านบน</p>
             </div>
           )}
         </>

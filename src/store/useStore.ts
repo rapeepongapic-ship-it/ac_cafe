@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
-import { MenuItem, Platform, DailySale, Ingredient, ExpenseEntry } from '../types'
+import { MenuItem, Platform, DailySale, Ingredient, ExpenseEntry, ExpenseSession } from '../types'
+
+interface AddSessionPayload {
+  date: string
+  note: string | null
+  photo: File | null
+  items: Array<{ ingredientId: string; amount: number }>
+}
 
 interface Store {
   menuItems: MenuItem[]
@@ -8,6 +15,7 @@ interface Store {
   sales: DailySale[]
   ingredients: Ingredient[]
   expenseEntries: ExpenseEntry[]
+  expenseSessions: ExpenseSession[]
   shopName: string
   userId: string | null
   loading: boolean
@@ -30,6 +38,10 @@ interface Store {
   addIngredient: (name: string) => Promise<void>
   deleteIngredient: (id: string) => Promise<void>
 
+  addExpenseSession: (payload: AddSessionPayload) => Promise<void>
+  deleteExpenseSession: (sessionId: string) => Promise<void>
+
+  // kept for ReportScreen compat
   addExpenseEntry: (entry: Omit<ExpenseEntry, 'id'>) => Promise<void>
   deleteExpenseEntry: (id: string) => Promise<void>
 }
@@ -42,24 +54,26 @@ export const useStore = create<Store>()((set, get) => ({
   sales: [],
   ingredients: [],
   expenseEntries: [],
+  expenseSessions: [],
   shopName: '',
   userId: null,
   loading: false,
 
   reset: () => set({
     menuItems: [], platforms: [], sales: [],
-    ingredients: [], expenseEntries: [],
+    ingredients: [], expenseEntries: [], expenseSessions: [],
     shopName: '', userId: null, loading: false,
   }),
 
   loadData: async (userId, shopName) => {
     set({ loading: true, userId, shopName })
-    const [platRes, menuRes, salesRes, ingRes, expRes] = await Promise.all([
+    const [platRes, menuRes, salesRes, ingRes, expRes, sessRes] = await Promise.all([
       supabase.from('platforms').select('*').eq('user_id', userId),
       supabase.from('menu_items').select('*, platform_prices(*)').eq('user_id', userId),
       supabase.from('daily_sales').select('*, sale_items(*)').eq('user_id', userId),
       supabase.from('ingredients').select('*').eq('user_id', userId).order('name'),
       supabase.from('expense_entries').select('*').eq('user_id', userId).order('date', { ascending: false }),
+      supabase.from('expense_sessions').select('*').eq('user_id', userId).order('date', { ascending: false }),
     ])
 
     const platforms: Platform[] = (platRes.data ?? []).map(p => ({
@@ -86,10 +100,18 @@ export const useStore = create<Store>()((set, get) => ({
 
     const expenseEntries: ExpenseEntry[] = (expRes.data ?? []).map((e: any) => ({
       id: e.id, ingredientId: e.ingredient_id, date: e.date,
-      amount: Number(e.amount), photoUrl: e.photo_url ?? null, note: e.note ?? null,
+      amount: Number(e.amount), photoUrl: e.photo_url ?? null,
+      note: e.note ?? null, sessionId: e.session_id ?? null,
     }))
 
-    set({ platforms, menuItems, sales, ingredients, expenseEntries, loading: false })
+    const expenseSessions: ExpenseSession[] = (sessRes.data ?? []).map((s: any) => ({
+      id: s.id, date: s.date, photoUrl: s.photo_url ?? null, note: s.note ?? null,
+      items: expenseEntries
+        .filter(e => e.sessionId === s.id)
+        .map(e => ({ id: e.id, ingredientId: e.ingredientId, amount: e.amount })),
+    }))
+
+    set({ platforms, menuItems, sales, ingredients, expenseEntries, expenseSessions, loading: false })
   },
 
   // ── MenuItem ──────────────────────────────────────────────────────────────
@@ -214,6 +236,60 @@ export const useStore = create<Store>()((set, get) => ({
     await supabase.from('expense_entries').delete().eq('id', id)
     if (entry?.photoUrl) {
       const path = entry.photoUrl.split('/expense-photos/')[1]
+      if (path) await supabase.storage.from('expense-photos').remove([path])
+    }
+  },
+
+  // ── ExpenseSession ────────────────────────────────────────────────────────
+
+  addExpenseSession: async (payload) => {
+    const { userId } = get()
+    if (!userId) return
+    const sessionId = uid()
+
+    let photoUrl: string | null = null
+    if (payload.photo) {
+      const ext = payload.photo.name.split('.').pop() || 'jpg'
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`
+      const { error } = await supabase.storage.from('expense-photos').upload(path, payload.photo)
+      if (!error) photoUrl = supabase.storage.from('expense-photos').getPublicUrl(path).data.publicUrl
+    }
+
+    await supabase.from('expense_sessions').insert({
+      id: sessionId, user_id: userId, date: payload.date,
+      photo_url: photoUrl, note: payload.note,
+    })
+
+    const entryRows = payload.items.map(item => ({
+      id: uid(), user_id: userId,
+      ingredient_id: item.ingredientId, date: payload.date,
+      amount: item.amount, photo_url: null, note: null, session_id: sessionId,
+    }))
+    if (entryRows.length > 0) await supabase.from('expense_entries').insert(entryRows)
+
+    const newEntries: ExpenseEntry[] = entryRows.map(r => ({
+      id: r.id, ingredientId: r.ingredient_id, date: r.date,
+      amount: Number(r.amount), photoUrl: null, note: null, sessionId: sessionId,
+    }))
+    const newSession: ExpenseSession = {
+      id: sessionId, date: payload.date, photoUrl, note: payload.note,
+      items: newEntries.map(e => ({ id: e.id, ingredientId: e.ingredientId, amount: e.amount })),
+    }
+    set(s => ({
+      expenseSessions: [newSession, ...s.expenseSessions],
+      expenseEntries: [...newEntries, ...s.expenseEntries],
+    }))
+  },
+
+  deleteExpenseSession: async (sessionId) => {
+    const session = get().expenseSessions.find(s => s.id === sessionId)
+    set(s => ({
+      expenseSessions: s.expenseSessions.filter(s => s.id !== sessionId),
+      expenseEntries: s.expenseEntries.filter(e => e.sessionId !== sessionId),
+    }))
+    await supabase.from('expense_sessions').delete().eq('id', sessionId)
+    if (session?.photoUrl) {
+      const path = session.photoUrl.split('/expense-photos/')[1]
       if (path) await supabase.storage.from('expense-photos').remove([path])
     }
   },

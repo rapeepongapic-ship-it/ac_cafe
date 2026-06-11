@@ -42,4 +42,19 @@ export interface ExpenseEntry {
   amount: number;
   photoUrl: string | null;
   note: string | null;
+  sessionId: string | null;
+}
+
+export interface ExpenseSessionItem {
+  id: string;
+  ingredientId: string;
+  amount: number;
+}
+
+export interface ExpenseSession {
+  id: string;
+  date: string; // "YYYY-MM-DD"
+  photoUrl: string | null;
+  note: string | null;
+  items: ExpenseSessionItem[];
 }
