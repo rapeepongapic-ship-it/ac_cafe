@@ -11,7 +11,7 @@ export default function SettingsScreen() {
   const [tab, setTab] = useState<Tab>('menu')
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full lg:max-w-2xl lg:mx-auto">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-cafe-border-light">
         <div className="flex items-center gap-2 mb-3">

@@ -73,7 +73,7 @@ export default function SalesScreen({ onNavigate }: { onNavigate: (page: number)
         />
       )}
 
-      <div className="p-4 space-y-4 pb-8">
+      <div className="p-4 lg:px-8 lg:py-6 space-y-4 pb-8 lg:max-w-2xl lg:mx-auto">
         {/* Header */}
         <div className="flex items-center gap-2 pt-1">
           <h1 className="flex-1 text-xl font-bold text-cafe-text">บันทึกยอดขาย</h1>

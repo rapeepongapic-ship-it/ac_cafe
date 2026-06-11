@@ -15,7 +15,7 @@ interface Props {
 export default function TopNav({ page, onNavigate }: Props) {
   const { shopName } = useStore()
   return (
-    <div className="bg-cafe-card border-b border-cafe-border px-3 pt-2 pb-2 shadow-sm sticky top-0 z-10">
+    <div className="lg:hidden bg-cafe-card border-b border-cafe-border px-3 pt-2 pb-2 shadow-sm sticky top-0 z-10">
       {shopName && (
         <p className="text-[11px] font-semibold text-cafe-muted text-center mb-1.5 tracking-wide truncate">
           {shopName}

@@ -77,8 +77,8 @@ export default function ReportScreen() {
   }), [summaries])
 
   return (
-    <div className="p-4 space-y-4 pb-8">
-      <h1 className="text-xl font-bold text-cafe-text pt-1">รายงาน</h1>
+    <div className="p-4 lg:px-8 lg:py-6 space-y-4 lg:space-y-5 pb-8">
+      <h1 className="text-xl lg:text-2xl font-bold text-cafe-text pt-1">รายงาน</h1>
 
       {/* Quick filter */}
       <div className="space-y-2">
@@ -155,7 +155,7 @@ export default function ReportScreen() {
       ) : (
         <>
           {/* Grand summary cards */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <StatCard label="รายได้รวม"  value={`${fmt(grand.revenue)} ฿`} sub={`${fmt(grand.qty)} แก้ว`} />
             <StatCard
               label="กำไรสุทธิ"
@@ -182,41 +182,41 @@ export default function ReportScreen() {
               </div>
 
               {/* Table header */}
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2 bg-cafe-input/50 text-[10px] font-semibold text-cafe-muted uppercase tracking-wide">
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 lg:px-5 py-2 bg-cafe-input/50 text-[10px] font-semibold text-cafe-muted uppercase tracking-wide">
                 <span>เมนู</span>
-                <span className="text-right w-10">แก้ว</span>
-                <span className="text-right w-14">รายได้</span>
-                {s.platform.feePercent > 0 && <span className="text-right w-12">ค่า GP</span>}
-                <span className="text-right w-14">กำไร</span>
+                <span className="text-right w-10 lg:w-16">แก้ว</span>
+                <span className="text-right w-16 lg:w-28">รายได้</span>
+                {s.platform.feePercent > 0 && <span className="text-right w-14 lg:w-24">{s.platform.feeLabel || 'ค่า GP'}</span>}
+                <span className="text-right w-16 lg:w-28">กำไร</span>
               </div>
 
               {/* Rows */}
               {s.rows.map((row) => (
                 <div
                   key={row.menuItemId}
-                  className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 border-t border-cafe-border-light text-sm"
+                  className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 lg:px-5 py-2.5 lg:py-3 border-t border-cafe-border-light text-sm"
                 >
                   <span className="text-cafe-text font-medium truncate">{row.name}</span>
-                  <span className="text-right w-10 text-cafe-text-2">{row.quantity}</span>
-                  <span className="text-right w-14 text-cafe-text-2">{fmt(row.revenue)}</span>
+                  <span className="text-right w-10 lg:w-16 text-cafe-text-2">{row.quantity}</span>
+                  <span className="text-right w-16 lg:w-28 text-cafe-text-2">{fmt(row.revenue)}</span>
                   {s.platform.feePercent > 0 && (
-                    <span className="text-right w-12 text-cafe-muted">-{fmt(row.feeDeduct)}</span>
+                    <span className="text-right w-14 lg:w-24 text-cafe-muted">-{fmt(row.feeDeduct)}</span>
                   )}
-                  <span className={`text-right w-14 font-semibold ${row.profit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  <span className={`text-right w-16 lg:w-28 font-semibold ${row.profit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                     {fmt(row.profit)}
                   </span>
                 </div>
               ))}
 
               {/* Platform total */}
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 border-t border-cafe-border bg-cafe-section text-sm font-bold">
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 lg:px-5 py-2.5 lg:py-3 border-t border-cafe-border bg-cafe-section text-sm font-bold">
                 <span className="text-cafe-text-2">รวม</span>
-                <span className="text-right w-10 text-cafe-text">{s.totalQty}</span>
-                <span className="text-right w-14 text-cafe-text">{fmt(s.totalRevenue)}</span>
+                <span className="text-right w-10 lg:w-16 text-cafe-text">{s.totalQty}</span>
+                <span className="text-right w-16 lg:w-28 text-cafe-text">{fmt(s.totalRevenue)}</span>
                 {s.platform.feePercent > 0 && (
-                  <span className="text-right w-12 text-cafe-muted">-{fmt(s.totalFee)}</span>
+                  <span className="text-right w-14 lg:w-24 text-cafe-muted">-{fmt(s.totalFee)}</span>
                 )}
-                <span className={`text-right w-14 ${s.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                <span className={`text-right w-16 lg:w-28 ${s.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                   {fmt(s.totalProfit)}
                 </span>
               </div>
@@ -250,12 +250,12 @@ function StatCard({ label, value, sub, positive, dim }: {
   label: string; value: string; sub: string; positive?: boolean; dim?: boolean
 }) {
   return (
-    <div className="bg-cafe-card border border-cafe-border rounded-xl px-3 py-3 shadow-sm">
+    <div className="bg-cafe-card border border-cafe-border rounded-xl px-3 lg:px-5 py-3 lg:py-4 shadow-sm">
       <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-wide mb-1">{label}</p>
-      <p className={`text-lg font-bold ${dim ? 'text-cafe-text-2' : positive === false ? 'text-red-600' : positive ? 'text-green-700' : 'text-cafe-text'}`}>
+      <p className={`text-lg lg:text-2xl font-bold ${dim ? 'text-cafe-text-2' : positive === false ? 'text-red-600' : positive ? 'text-green-700' : 'text-cafe-text'}`}>
         {value}
       </p>
-      {sub && <p className="text-xs text-cafe-muted mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs lg:text-sm text-cafe-muted mt-0.5">{sub}</p>}
     </div>
   )
 }
