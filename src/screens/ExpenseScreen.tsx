@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { format, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval } from 'date-fns'
+import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { Plus, Minus, Trash2, Camera, X, ShoppingCart, Package, ChevronDown, ChevronUp, Receipt, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useStore } from '../store/useStore'
@@ -10,46 +10,82 @@ const uid     = () => crypto.randomUUID()
 
 type TripItem = { rowId: string; ingredientId: string; pricePerUnit: string; quantity: string }
 
+const MONTH_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
+
 function MonthPicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
-  const months = useMemo(() => {
-    const arr: Date[] = []
-    for (let i = 0; i < 13; i++) arr.push(subMonths(new Date(), i))
-    return arr
-  }, [])
+  const [open, setOpen]       = useState(false)
+  const [pickerYear, setPickerYear] = useState(value.getFullYear())
+  const now = new Date()
+
+  const select = (month: number) => {
+    onChange(new Date(pickerYear, month, 1))
+    setOpen(false)
+  }
+
+  const isFuture = (month: number) =>
+    pickerYear > now.getFullYear() ||
+    (pickerYear === now.getFullYear() && month > now.getMonth())
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative">
+      {/* Trigger */}
       <button
-        onClick={() => onChange(subMonths(value, 1))}
-        className="w-8 h-8 flex items-center justify-center rounded-lg border border-cafe-border bg-cafe-card hover:bg-cafe-section transition-colors cursor-pointer"
+        onClick={() => { setPickerYear(value.getFullYear()); setOpen(v => !v) }}
+        className="w-full flex items-center justify-between gap-2 bg-cafe-card border border-cafe-border rounded-xl px-4 py-2.5 text-sm font-semibold text-cafe-text hover:bg-cafe-section transition-colors cursor-pointer"
       >
-        <ChevronLeft size={15} className="text-cafe-text-2" />
+        <span>{format(value, 'MMMM yyyy', { locale: th })}</span>
+        <ChevronDown size={15} className={`text-cafe-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      <select
-        value={format(value, 'yyyy-MM')}
-        onChange={e => onChange(new Date(e.target.value + '-01'))}
-        className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm font-semibold text-cafe-text outline-none focus:border-cafe-accent cursor-pointer text-center"
-      >
-        {months.map(m => {
-          const key = format(m, 'yyyy-MM')
-          return (
-            <option key={key} value={key}>
-              {format(m, 'MMMM yyyy', { locale: th })}
-            </option>
-          )
-        })}
-      </select>
-      <button
-        onClick={() => {
-          const next = new Date(value)
-          next.setMonth(next.getMonth() + 1)
-          if (next <= new Date()) onChange(next)
-        }}
-        disabled={format(value, 'yyyy-MM') === format(new Date(), 'yyyy-MM')}
-        className="w-8 h-8 flex items-center justify-center rounded-lg border border-cafe-border bg-cafe-card hover:bg-cafe-section transition-colors cursor-pointer disabled:opacity-30"
-      >
-        <ChevronRight size={15} className="text-cafe-text-2" />
-      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-cafe-card border border-cafe-border rounded-2xl shadow-lg p-3">
+            {/* Year nav */}
+            <div className="flex items-center justify-between mb-3">
+              <button
+                onClick={() => setPickerYear(y => y - 1)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-cafe-section transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={16} className="text-cafe-text-2" />
+              </button>
+              <span className="text-sm font-bold text-cafe-text">{pickerYear + 543} ({pickerYear})</span>
+              <button
+                onClick={() => setPickerYear(y => y + 1)}
+                disabled={pickerYear >= now.getFullYear()}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-cafe-section transition-colors cursor-pointer disabled:opacity-30"
+              >
+                <ChevronRight size={16} className="text-cafe-text-2" />
+              </button>
+            </div>
+
+            {/* Month grid */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {MONTH_SHORT.map((label, i) => {
+                const isSelected = pickerYear === value.getFullYear() && i === value.getMonth()
+                const disabled   = isFuture(i)
+                return (
+                  <button
+                    key={i}
+                    onClick={() => !disabled && select(i)}
+                    disabled={disabled}
+                    className={`py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-cafe-accent text-white'
+                        : disabled
+                          ? 'text-cafe-border cursor-not-allowed'
+                          : 'text-cafe-text-2 hover:bg-cafe-section'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
