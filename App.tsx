@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Analytics } from '@vercel/analytics/react';
 import { PageContext } from './src/context/PageContext';
 import TopNav from './src/components/TopNav';
 import WebTokenGuard from './src/components/WebTokenGuard';
@@ -22,6 +23,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      {IS_WEB && <Analytics />}
       <WebTokenGuard>
         <PageContext.Provider value={{ currentPage, navigateTo }}>
           <View style={styles.outer}>

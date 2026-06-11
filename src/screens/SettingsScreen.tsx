@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform, Animated, Pressable,
+  StyleSheet, Alert, Animated, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -89,8 +89,7 @@ function MenuTab() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
         {platforms.length === 0 && (
           <View style={styles.hintBox}>
             <Ionicons name="information-circle-outline" size={15} color="#92400E" style={{ marginRight: 6 }} />
@@ -121,7 +120,6 @@ function MenuTab() {
           ))
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -203,8 +201,7 @@ function MenuForm({ platforms, initialItem, onSave, onCancel }: {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>{initialItem ? 'แก้ไขเมนู' : 'เพิ่มเมนูใหม่'}</Text>
 
@@ -260,7 +257,6 @@ function MenuForm({ platforms, initialItem, onSave, onCancel }: {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -293,8 +289,7 @@ function PlatformTab() {
   ]);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
         {showForm ? (
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>{editItem ? 'แก้ไขแพลตฟอร์ม' : 'เพิ่มแพลตฟอร์ม'}</Text>
@@ -377,7 +372,6 @@ function PlatformTab() {
           </>
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
