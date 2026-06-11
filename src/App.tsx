@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import TopNav from './components/TopNav'
 import ReportScreen from './screens/ReportScreen'
@@ -10,13 +10,21 @@ import { seedIfEmpty } from './utils/seedData'
 seedIfEmpty()
 
 export default function App() {
-  const [page, setPage] = useState(0)
+  const [page, setPage]       = useState(0)
+  const [animDir, setAnimDir] = useState<'right' | 'left' | null>(null)
   const [allowed, setAllowed] = useState<boolean | null>(null)
+  const prevPage              = useRef(0)
 
   useEffect(() => {
     const path = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '')
     setAllowed(path === ACCESS_TOKEN)
   }, [])
+
+  const navigate = (newPage: number) => {
+    setAnimDir(newPage > prevPage.current ? 'right' : 'left')
+    prevPage.current = newPage
+    setPage(newPage)
+  }
 
   if (allowed === null) return null
 
@@ -38,11 +46,16 @@ export default function App() {
     <div className="min-h-screen bg-cafe-brown flex justify-center">
       <Analytics />
       <div className="w-full max-w-[430px] min-h-screen bg-cafe-bg flex flex-col shadow-2xl">
-        <TopNav page={page} onNavigate={setPage} />
-        <main className="flex-1 overflow-y-auto">
-          {page === 0 && <ReportScreen />}
-          {page === 1 && <SalesScreen onNavigate={setPage} />}
-          {page === 2 && <SettingsScreen />}
+        <TopNav page={page} onNavigate={navigate} />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div
+            key={page}
+            className={animDir === 'right' ? 'page-enter-right' : animDir === 'left' ? 'page-enter-left' : ''}
+          >
+            {page === 0 && <ReportScreen />}
+            {page === 1 && <SalesScreen onNavigate={navigate} />}
+            {page === 2 && <SettingsScreen />}
+          </div>
         </main>
       </div>
     </div>

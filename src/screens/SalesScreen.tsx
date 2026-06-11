@@ -1,20 +1,22 @@
 import { useState, useMemo } from 'react'
-import { format, subDays } from 'date-fns'
+import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
-import { Calendar, Store, Minus, Plus, CheckCircle, Trash2, AlertCircle } from 'lucide-react'
+import { CalendarDays, Store, Minus, Plus, CheckCircle, Trash2, AlertCircle, Coffee, ArrowRight } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import DatePicker from '../components/DatePicker'
+import SaveSuccess from '../components/SaveSuccess'
 
 type PlatformQtys = Record<string, Record<string, string>>
 
-const today     = format(new Date(), 'yyyy-MM-dd')
-const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+const today = format(new Date(), 'yyyy-MM-dd')
 
 export default function SalesScreen({ onNavigate }: { onNavigate: (page: number) => void }) {
   const { menuItems, platforms, sales, addSale, deleteSale } = useStore()
-  const [date, setDate]           = useState(today)
+  const [date, setDate]             = useState(today)
   const [platformId, setPlatformId] = useState(platforms[0]?.id ?? '')
-  const [allQtys, setAllQtys]     = useState<PlatformQtys>({})
-  const [savedMsg, setSavedMsg]   = useState('')
+  const [allQtys, setAllQtys]       = useState<PlatformQtys>({})
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [showSuccess, setShowSuccess]   = useState(false)
 
   if (menuItems.length === 0) return <Onboarding onNavigate={onNavigate} />
 
@@ -54,225 +56,209 @@ export default function SalesScreen({ onNavigate }: { onNavigate: (page: number)
     })
     if (n === 0) { alert('กรุณากรอกจำนวนแก้วอย่างน้อย 1 รายการ'); return }
     setAllQtys({})
-    setSavedMsg(`บันทึกวันที่ ${fmtDate(date)} (${n} platform) เรียบร้อย ✓`)
-    setTimeout(() => setSavedMsg(''), 4000)
+    setShowSuccess(true)
   }
 
   const menuName     = (id: string) => menuItems.find((m) => m.id === id)?.name ?? id
   const platformName = (id: string) => platforms.find((p) => p.id === id)?.name ?? id
 
   return (
-    <div className="p-4 space-y-4 pb-8">
-      {/* Header */}
-      <div className="flex items-center gap-2 pt-1">
-        <h1 className="flex-1 text-xl font-bold text-cafe-text">บันทึกยอดขาย</h1>
-        {filledCount > 0 && (
-          <span className="text-xs font-semibold text-cafe-accent bg-cafe-section border border-cafe-border rounded-full px-3 py-1">
-            ยังไม่บันทึก
-          </span>
+    <>
+      {showSuccess && <SaveSuccess onDone={() => setShowSuccess(false)} />}
+      {showCalendar && (
+        <DatePicker
+          value={date}
+          onChange={setDate}
+          onClose={() => setShowCalendar(false)}
+        />
+      )}
+
+      <div className="p-4 space-y-4 pb-8">
+        {/* Header */}
+        <div className="flex items-center gap-2 pt-1">
+          <h1 className="flex-1 text-xl font-bold text-cafe-text">บันทึกยอดขาย</h1>
+          {filledCount > 0 && (
+            <span className="text-xs font-semibold text-cafe-accent bg-cafe-section border border-cafe-border rounded-full px-3 py-1">
+              ยังไม่บันทึก
+            </span>
+          )}
+        </div>
+
+        {/* Date — calendar icon opens picker */}
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">วันที่</p>
+          <button
+            onClick={() => setShowCalendar(true)}
+            className="w-full flex items-center gap-3 bg-cafe-card border border-cafe-border rounded-xl px-4 py-3 hover:bg-cafe-section transition-colors"
+          >
+            <CalendarDays size={17} className="text-cafe-accent shrink-0" />
+            <span className="flex-1 text-left text-sm font-semibold text-cafe-text">
+              {fmtDate(date)}
+            </span>
+            <span className="text-xs text-cafe-muted">{date}</span>
+          </button>
+        </div>
+
+        {/* Platform selector */}
+        {platforms.length === 0 ? (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-700">
+              ยังไม่มีแพลตฟอร์ม{' '}
+              <button onClick={() => onNavigate(2)} className="font-bold underline">ไปตั้งค่า</button>
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">แพลตฟอร์ม</p>
+            <div className="flex gap-2 overflow-x-auto pb-0.5">
+              {platforms.map((p) => {
+                const hasData = menuItems.some((m) => parseInt(allQtys[p.id]?.[m.id] ?? '0') > 0)
+                const active  = platformId === p.id
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setPlatformId(p.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold border whitespace-nowrap transition-all ${
+                      active
+                        ? 'bg-cafe-accent border-cafe-accent text-white'
+                        : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+                    }`}
+                  >
+                    <Store size={12} />
+                    {p.name}
+                    {hasData && !active && <span className="w-1.5 h-1.5 rounded-full bg-cafe-accent" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Menu qty inputs */}
+        {selectedPlatform && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">จำนวนแก้วที่ขายได้</p>
+              {runningTotal && runningTotal.qty > 0 && (
+                <p className="text-xs font-semibold text-cafe-text-2">
+                  {runningTotal.qty} แก้ว ·{' '}
+                  <span className={runningTotal.profit >= 0 ? 'text-green-700' : 'text-red-600'}>
+                    กำไร {runningTotal.profit.toLocaleString()} ฿
+                  </span>
+                </p>
+              )}
+            </div>
+
+            <div className="bg-cafe-card border border-cafe-border rounded-xl overflow-hidden shadow-sm">
+              {menuItems.map((m) => {
+                const pp    = m.platformPrices.find((x) => x.platformId === selectedPlatform.id)
+                const qty   = getQty(m.id)
+                const filled = parseInt(qty || '0') > 0
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex items-center px-4 py-3 border-b border-cafe-border-light last:border-0 transition-colors ${filled ? 'bg-amber-50/60' : ''}`}
+                  >
+                    <div className="flex-1 min-w-0 mr-3">
+                      <p className="text-sm font-semibold text-cafe-text truncate">{m.name}</p>
+                      {pp && pp.pricePerCup > 0 ? (
+                        <p className="text-xs text-cafe-muted mt-0.5">{pp.pricePerCup} ฿/แก้ว · ต้นทุน {m.costPerCup} ฿</p>
+                      ) : (
+                        <p className="text-xs text-red-500 mt-0.5">ยังไม่ตั้งราคา</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => { const c = parseInt(qty || '0') || 0; if (c > 0) setQty(m.id, String(c - 1)) }}
+                        className="w-8 h-8 rounded-lg bg-cafe-input border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform"
+                      >
+                        <Minus size={13} className="text-cafe-accent" />
+                      </button>
+                      <input
+                        type="number"
+                        value={qty}
+                        onChange={(e) => setQty(m.id, e.target.value)}
+                        placeholder="0"
+                        className={`w-12 h-9 text-center text-sm font-bold rounded-lg border outline-none ${
+                          filled
+                            ? 'bg-cafe-section border-cafe-accent text-cafe-text'
+                            : 'bg-cafe-input border-cafe-border text-cafe-text'
+                        }`}
+                      />
+                      <button
+                        onClick={() => { const c = parseInt(qty || '0') || 0; setQty(m.id, String(c + 1)) }}
+                        className="w-8 h-8 rounded-lg bg-cafe-input border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform"
+                      >
+                        <Plus size={13} className="text-cafe-accent" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={handleSave}
+              className="w-full flex items-center justify-center gap-2 bg-cafe-accent hover:bg-cafe-accent-dark text-white font-bold text-base py-4 rounded-xl shadow-md transition-all active:scale-[0.98]"
+            >
+              <CheckCircle size={19} />
+              บันทึกยอดขาย{filledCount > 1 ? ` (${filledCount} platform)` : ''}
+            </button>
+          </div>
+        )}
+
+        {/* Saved entries */}
+        {dateSales.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">
+              รายการที่บันทึกแล้ว — {fmtDate(date)}
+            </p>
+            {dateSales.map((sale) => {
+              const plat     = platforms.find((p) => p.id === sale.platformId)
+              const totalQty = sale.items.reduce((s, i) => s + i.quantity, 0)
+              const revenue  = sale.items.reduce((sum, item) => {
+                const mi = menuItems.find((m) => m.id === item.menuItemId)
+                const pr = mi?.platformPrices.find((x) => x.platformId === sale.platformId)?.pricePerCup ?? 0
+                return sum + item.quantity * pr
+              }, 0)
+              return (
+                <div key={sale.id} className="bg-cafe-card border border-cafe-border rounded-xl p-3.5 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Store size={13} className="text-cafe-accent shrink-0" />
+                    <span className="text-sm font-bold text-cafe-accent flex-1">{platformName(sale.platformId)}</span>
+                    {plat && plat.feePercent > 0 && (
+                      <span className="text-[10px] font-semibold text-cafe-muted bg-cafe-input border border-cafe-border rounded-full px-2 py-0.5">
+                        หัก {plat.feePercent}%
+                      </span>
+                    )}
+                    <span className="text-xs font-semibold text-cafe-text-2">{totalQty} แก้ว</span>
+                    {revenue > 0 && (
+                      <span className="text-xs font-semibold text-cafe-accent">· {revenue.toLocaleString()} ฿</span>
+                    )}
+                    <button
+                      onClick={() => { if (confirm('ต้องการลบรายการนี้?')) deleteSale(sale.id) }}
+                      className="ml-1 text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {sale.items.map((item) => (
+                      <div key={item.menuItemId} className="flex items-center gap-1.5 text-xs text-cafe-text-2">
+                        <span className="text-cafe-muted">·</span>
+                        <span>{menuName(item.menuItemId)}</span>
+                        <span className="text-cafe-muted">× {item.quantity} แก้ว</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
-
-      {/* Date */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">วันที่</p>
-        <div className="flex items-center gap-2 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2.5">
-          <Calendar size={15} className="text-cafe-muted shrink-0" />
-          <input
-            type="text"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            placeholder="YYYY-MM-DD"
-            className="flex-1 bg-transparent text-cafe-text text-sm outline-none"
-          />
-        </div>
-        <div className="flex gap-2">
-          {[{ label: 'วันนี้', value: today }, { label: 'เมื่อวาน', value: yesterday }].map((d) => (
-            <button
-              key={d.value}
-              onClick={() => setDate(d.value)}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                date === d.value
-                  ? 'bg-cafe-section border-cafe-accent text-cafe-accent'
-                  : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Platform selector */}
-      {platforms.length === 0 ? (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-          <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-700">
-            ยังไม่มีแพลตฟอร์ม{' '}
-            <button onClick={() => onNavigate(2)} className="font-bold underline">ไปตั้งค่า →</button>
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">แพลตฟอร์ม</p>
-          <div className="flex gap-2 overflow-x-auto pb-0.5">
-            {platforms.map((p) => {
-              const hasData = menuItems.some((m) => parseInt(allQtys[p.id]?.[m.id] ?? '0') > 0)
-              const active  = platformId === p.id
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setPlatformId(p.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold border whitespace-nowrap transition-all ${
-                    active
-                      ? 'bg-cafe-accent border-cafe-accent text-white'
-                      : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
-                  }`}
-                >
-                  <Store size={12} />
-                  {p.name}
-                  {hasData && !active && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-cafe-accent" />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Menu qty inputs */}
-      {selectedPlatform && (
-        <div className="space-y-3">
-          <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">จำนวนแก้วที่ขายได้</p>
-
-          {runningTotal && runningTotal.qty > 0 && (
-            <div className="flex flex-wrap items-center gap-2 bg-cafe-section border border-cafe-border rounded-xl px-3 py-2.5 text-sm">
-              <span className="font-semibold text-cafe-text-2">{runningTotal.qty} แก้ว</span>
-              <span className="text-cafe-muted">·</span>
-              <span className="font-semibold text-cafe-text-2">รายได้ {runningTotal.revenue.toLocaleString()} ฿</span>
-              <span className="text-cafe-muted">·</span>
-              <span className={`font-bold ${runningTotal.profit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                กำไร {runningTotal.profit.toLocaleString()} ฿
-              </span>
-            </div>
-          )}
-
-          <div className="bg-cafe-card border border-cafe-border rounded-xl overflow-hidden shadow-sm">
-            {menuItems.map((m) => {
-              const pp    = m.platformPrices.find((x) => x.platformId === selectedPlatform.id)
-              const qty   = getQty(m.id)
-              const filled = parseInt(qty || '0') > 0
-              return (
-                <div
-                  key={m.id}
-                  className={`flex items-center px-4 py-3 border-b border-cafe-border-light last:border-0 transition-colors ${filled ? 'bg-amber-50/60' : ''}`}
-                >
-                  <div className="flex-1 min-w-0 mr-3">
-                    <p className="text-sm font-semibold text-cafe-text truncate">{m.name}</p>
-                    {pp && pp.pricePerCup > 0 ? (
-                      <p className="text-xs text-cafe-muted mt-0.5">{pp.pricePerCup} ฿/แก้ว · ต้นทุน {m.costPerCup} ฿</p>
-                    ) : (
-                      <p className="text-xs text-red-500 mt-0.5">ยังไม่ตั้งราคา</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => { const c = parseInt(qty || '0') || 0; if (c > 0) setQty(m.id, String(c - 1)) }}
-                      className="w-8 h-8 rounded-lg bg-cafe-input border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform"
-                    >
-                      <Minus size={13} className="text-cafe-accent" />
-                    </button>
-                    <input
-                      type="number"
-                      value={qty}
-                      onChange={(e) => setQty(m.id, e.target.value)}
-                      placeholder="0"
-                      className={`w-12 h-9 text-center text-sm font-bold rounded-lg border outline-none ${
-                        filled
-                          ? 'bg-cafe-section border-cafe-accent text-cafe-text'
-                          : 'bg-cafe-input border-cafe-border text-cafe-text'
-                      }`}
-                    />
-                    <button
-                      onClick={() => { const c = parseInt(qty || '0') || 0; setQty(m.id, String(c + 1)) }}
-                      className="w-8 h-8 rounded-lg bg-cafe-input border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform"
-                    >
-                      <Plus size={13} className="text-cafe-accent" />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <button
-            onClick={handleSave}
-            className="w-full flex items-center justify-center gap-2 bg-cafe-accent hover:bg-cafe-accent-dark text-white font-bold text-base py-4 rounded-xl shadow-md transition-all active:scale-[0.98]"
-          >
-            <CheckCircle size={19} />
-            บันทึกยอดขาย{filledCount > 1 ? ` (${filledCount} platform)` : ''}
-          </button>
-
-          {savedMsg && (
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5">
-              <CheckCircle size={15} className="text-green-600 shrink-0" />
-              <p className="text-sm font-semibold text-green-700">{savedMsg}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Saved entries */}
-      {dateSales.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">
-            รายการที่บันทึกแล้ว — {fmtDate(date)}
-          </p>
-          {dateSales.map((sale) => {
-            const plat     = platforms.find((p) => p.id === sale.platformId)
-            const totalQty = sale.items.reduce((s, i) => s + i.quantity, 0)
-            const revenue  = sale.items.reduce((sum, item) => {
-              const mi = menuItems.find((m) => m.id === item.menuItemId)
-              const pr = mi?.platformPrices.find((x) => x.platformId === sale.platformId)?.pricePerCup ?? 0
-              return sum + item.quantity * pr
-            }, 0)
-            return (
-              <div key={sale.id} className="bg-cafe-card border border-cafe-border rounded-xl p-3.5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Store size={13} className="text-cafe-accent shrink-0" />
-                  <span className="text-sm font-bold text-cafe-accent flex-1">{platformName(sale.platformId)}</span>
-                  {plat && plat.feePercent > 0 && (
-                    <span className="text-[10px] font-semibold text-cafe-muted bg-cafe-input border border-cafe-border rounded-full px-2 py-0.5">
-                      หัก {plat.feePercent}%
-                    </span>
-                  )}
-                  <span className="text-xs font-semibold text-cafe-text-2">{totalQty} แก้ว</span>
-                  {revenue > 0 && (
-                    <span className="text-xs font-semibold text-cafe-accent">· {revenue.toLocaleString()} ฿</span>
-                  )}
-                  <button
-                    onClick={() => { if (confirm('ต้องการลบรายการนี้?')) deleteSale(sale.id) }}
-                    className="ml-1 text-red-400 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  {sale.items.map((item) => (
-                    <div key={item.menuItemId} className="flex items-center gap-1.5 text-xs text-cafe-text-2">
-                      <span className="text-cafe-muted">·</span>
-                      <span>{menuName(item.menuItemId)}</span>
-                      <span className="text-cafe-muted">× {item.quantity} แก้ว</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
+    </>
   )
 }
 
@@ -280,7 +266,7 @@ function Onboarding({ onNavigate }: { onNavigate: (page: number) => void }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] p-8 text-center">
       <div className="w-24 h-24 bg-cafe-section border border-cafe-border rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-        <span className="text-5xl">☕</span>
+        <Coffee size={44} className="text-cafe-accent" />
       </div>
       <h2 className="text-2xl font-bold text-cafe-text mb-1">ยินดีต้อนรับ</h2>
       <p className="text-base font-semibold text-cafe-accent mb-2">ร้านของคุณมีเมนูอะไรบ้าง?</p>
@@ -296,7 +282,7 @@ function Onboarding({ onNavigate }: { onNavigate: (page: number) => void }) {
         onClick={() => onNavigate(2)}
         className="w-full flex items-center justify-center gap-2 bg-cafe-accent hover:bg-cafe-accent-dark text-white font-bold py-4 rounded-xl shadow-md transition-colors"
       >
-        ไปตั้งค่าเมนูเลย →
+        ไปตั้งค่าเมนูเลย <ArrowRight size={16} />
       </button>
     </div>
   )

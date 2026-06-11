@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { format, startOfMonth, endOfMonth, subDays, parseISO, isWithinInterval } from 'date-fns'
-import { TrendingUp, TrendingDown, Store } from 'lucide-react'
+import { TrendingUp, TrendingDown, Store, BarChart2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { calcPlatformSummary } from '../utils/calculations'
 
@@ -148,7 +148,7 @@ export default function ReportScreen() {
       {/* No data */}
       {summaries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <span className="text-5xl mb-4">📊</span>
+          <BarChart2 size={48} className="mb-4 text-cafe-border" />
           <p className="text-cafe-text-2 font-semibold mb-1">ยังไม่มีข้อมูลในช่วงนี้</p>
           <p className="text-cafe-muted text-sm">บันทึกยอดขายในแท็บ "บันทึกขาย"</p>
         </div>

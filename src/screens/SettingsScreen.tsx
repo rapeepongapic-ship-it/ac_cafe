@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, Store, Coffee, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Plus, Pencil, Trash2, Store, Coffee, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import type { MenuItem, Platform } from '../types'
 
@@ -71,7 +71,7 @@ function MenuTab() {
     <div className="space-y-3">
       {platforms.length === 0 && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
-          <span className="shrink-0 mt-0.5">⚠️</span>
+          <AlertTriangle size={15} className="shrink-0 mt-0.5 text-amber-600" />
           <span>แนะนำ: เพิ่มแพลตฟอร์มก่อน เพื่อตั้งราคาขายต่อแพลตฟอร์มได้</span>
         </div>
       )}
@@ -85,7 +85,7 @@ function MenuTab() {
       </button>
 
       {menuItems.length === 0 ? (
-        <EmptyState icon="☕" title="ยังไม่มีเมนู" sub="กดปุ่มด้านบนเพื่อเพิ่มเมนูแรก" />
+        <EmptyState icon={<Coffee size={40} />} title="ยังไม่มีเมนู" sub="กดปุ่มด้านบนเพื่อเพิ่มเมนูแรก" />
       ) : (
         menuItems.map((item) => {
           const prices = item.platformPrices.filter((p) => p.pricePerCup > 0)
@@ -245,7 +245,7 @@ function PlatformTab() {
       </button>
 
       {platforms.length === 0 ? (
-        <EmptyState icon="🏪" title="ยังไม่มีแพลตฟอร์ม" sub="เพิ่มช่องทางขาย เช่น Line OA, Lineman" />
+        <EmptyState icon={<Store size={40} />} title="ยังไม่มีแพลตฟอร์ม" sub="เพิ่มช่องทางขาย เช่น Line OA, Lineman" />
       ) : (
         platforms.map((p) => {
           const isOpen   = expanded === p.id
@@ -364,10 +364,10 @@ function FormActions({ onSave, onCancel }: { onSave: () => void; onCancel: () =>
   )
 }
 
-function EmptyState({ icon, title, sub }: { icon: string; title: string; sub: string }) {
+function EmptyState({ icon, title, sub }: { icon: ReactNode; title: string; sub: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center">
-      <span className="text-4xl mb-3">{icon}</span>
+      <div className="mb-3 text-cafe-border">{icon}</div>
       <p className="font-semibold text-cafe-text-2 mb-1">{title}</p>
       <p className="text-sm text-cafe-muted">{sub}</p>
     </div>
