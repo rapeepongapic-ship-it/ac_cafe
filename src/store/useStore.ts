@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
-import { MenuItem, Platform, DailySale } from '../types'
+import { MenuItem, Platform, DailySale, Ingredient, ExpenseEntry } from '../types'
 
 interface Store {
   menuItems: MenuItem[]
   platforms: Platform[]
   sales: DailySale[]
+  ingredients: Ingredient[]
+  expenseEntries: ExpenseEntry[]
   shopName: string
   userId: string | null
   loading: boolean
@@ -24,6 +26,12 @@ interface Store {
   addSale: (sale: Omit<DailySale, 'id'>) => Promise<void>
   updateSale: (id: string, sale: Omit<DailySale, 'id'>) => Promise<void>
   deleteSale: (id: string) => Promise<void>
+
+  addIngredient: (name: string) => Promise<void>
+  deleteIngredient: (id: string) => Promise<void>
+
+  addExpenseEntry: (entry: Omit<ExpenseEntry, 'id'>) => Promise<void>
+  deleteExpenseEntry: (id: string) => Promise<void>
 }
 
 const uid = () => crypto.randomUUID()
@@ -32,18 +40,26 @@ export const useStore = create<Store>()((set, get) => ({
   menuItems: [],
   platforms: [],
   sales: [],
+  ingredients: [],
+  expenseEntries: [],
   shopName: '',
   userId: null,
   loading: false,
 
-  reset: () => set({ menuItems: [], platforms: [], sales: [], shopName: '', userId: null, loading: false }),
+  reset: () => set({
+    menuItems: [], platforms: [], sales: [],
+    ingredients: [], expenseEntries: [],
+    shopName: '', userId: null, loading: false,
+  }),
 
   loadData: async (userId, shopName) => {
     set({ loading: true, userId, shopName })
-    const [platRes, menuRes, salesRes] = await Promise.all([
+    const [platRes, menuRes, salesRes, ingRes, expRes] = await Promise.all([
       supabase.from('platforms').select('*').eq('user_id', userId),
       supabase.from('menu_items').select('*, platform_prices(*)').eq('user_id', userId),
       supabase.from('daily_sales').select('*, sale_items(*)').eq('user_id', userId),
+      supabase.from('ingredients').select('*').eq('user_id', userId).order('name'),
+      supabase.from('expense_entries').select('*').eq('user_id', userId).order('date', { ascending: false }),
     ])
 
     const platforms: Platform[] = (platRes.data ?? []).map(p => ({
@@ -64,7 +80,16 @@ export const useStore = create<Store>()((set, get) => ({
       })),
     }))
 
-    set({ platforms, menuItems, sales, loading: false })
+    const ingredients: Ingredient[] = (ingRes.data ?? []).map((i: any) => ({
+      id: i.id, name: i.name,
+    }))
+
+    const expenseEntries: ExpenseEntry[] = (expRes.data ?? []).map((e: any) => ({
+      id: e.id, ingredientId: e.ingredient_id, date: e.date,
+      amount: Number(e.amount), photoUrl: e.photo_url ?? null, note: e.note ?? null,
+    }))
+
+    set({ platforms, menuItems, sales, ingredients, expenseEntries, loading: false })
   },
 
   // ── MenuItem ──────────────────────────────────────────────────────────────
@@ -147,5 +172,49 @@ export const useStore = create<Store>()((set, get) => ({
   deleteSale: async (id) => {
     set(s => ({ sales: s.sales.filter(x => x.id !== id) }))
     await supabase.from('daily_sales').delete().eq('id', id)
+  },
+
+  // ── Ingredient ────────────────────────────────────────────────────────────
+
+  addIngredient: async (name) => {
+    const { userId } = get()
+    if (!userId) return
+    const id = uid()
+    set(s => ({ ingredients: [...s.ingredients, { id, name }].sort((a, b) => a.name.localeCompare(b.name, 'th')) }))
+    await supabase.from('ingredients').insert({ id, user_id: userId, name })
+  },
+
+  deleteIngredient: async (id) => {
+    set(s => ({ ingredients: s.ingredients.filter(i => i.id !== id) }))
+    await supabase.from('ingredients').delete().eq('id', id)
+  },
+
+  // ── ExpenseEntry ──────────────────────────────────────────────────────────
+
+  addExpenseEntry: async (entry) => {
+    const { userId } = get()
+    if (!userId) return
+    const id = uid()
+    const newEntry: ExpenseEntry = { ...entry, id }
+    set(s => ({ expenseEntries: [newEntry, ...s.expenseEntries] }))
+    await supabase.from('expense_entries').insert({
+      id,
+      user_id: userId,
+      ingredient_id: entry.ingredientId,
+      date: entry.date,
+      amount: entry.amount,
+      photo_url: entry.photoUrl,
+      note: entry.note,
+    })
+  },
+
+  deleteExpenseEntry: async (id) => {
+    const entry = get().expenseEntries.find(e => e.id === id)
+    set(s => ({ expenseEntries: s.expenseEntries.filter(e => e.id !== id) }))
+    await supabase.from('expense_entries').delete().eq('id', id)
+    if (entry?.photoUrl) {
+      const path = entry.photoUrl.split('/expense-photos/')[1]
+      if (path) await supabase.storage.from('expense-photos').remove([path])
+    }
   },
 }))

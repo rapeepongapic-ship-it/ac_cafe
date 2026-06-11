@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { format, startOfMonth, endOfMonth, subDays, parseISO, isWithinInterval } from 'date-fns'
-import { TrendingUp, TrendingDown, Store, BarChart2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Store, BarChart2, ShoppingCart } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { calcPlatformSummary } from '../utils/calculations'
 
@@ -40,7 +40,7 @@ function getRange(filter: QuickFilter, from: string, to: string) {
 const fmt = (n: number) => n.toLocaleString()
 
 export default function ReportScreen() {
-  const { sales, platforms, menuItems } = useStore()
+  const { sales, platforms, menuItems, expenseEntries, ingredients } = useStore()
   const [filter, setFilter]             = useState<QuickFilter>('month')
   const [customFrom, setCustomFrom]     = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [customTo, setCustomTo]         = useState(() => format(new Date(), 'yyyy-MM-dd'))
@@ -240,7 +240,79 @@ export default function ReportScreen() {
               </div>
             </div>
           )}
+
+          {/* Expense summary */}
+          <ExpenseSummary
+            expenseEntries={expenseEntries}
+            ingredients={ingredients}
+            from={from}
+            to={to}
+            saleProfit={grand.profit}
+          />
         </>
+      )}
+    </div>
+  )
+}
+
+function ExpenseSummary({ expenseEntries, ingredients, from, to, saleProfit }: {
+  expenseEntries: import('../types').ExpenseEntry[]
+  ingredients: import('../types').Ingredient[]
+  from: Date
+  to: Date
+  saleProfit: number
+}) {
+  const filtered = expenseEntries.filter(e => {
+    try { return isWithinInterval(parseISO(e.date), { start: from, end: to }) }
+    catch { return false }
+  })
+  if (filtered.length === 0) return null
+
+  const total = filtered.reduce((s, e) => s + e.amount, 0)
+  const byIngredient = ingredients
+    .map(ing => ({
+      name: ing.name,
+      total: filtered.filter(e => e.ingredientId === ing.id).reduce((s, e) => s + e.amount, 0),
+      count: filtered.filter(e => e.ingredientId === ing.id).length,
+    }))
+    .filter(x => x.total > 0)
+    .sort((a, b) => b.total - a.total)
+
+  const net = saleProfit - total
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">รายจ่ายวัตถุดิบ</p>
+
+      <div className="bg-cafe-card border border-cafe-border rounded-xl overflow-hidden shadow-sm">
+        <div className="flex items-center gap-2 px-4 lg:px-5 py-3 bg-red-50 border-b border-cafe-border">
+          <ShoppingCart size={14} className="text-red-500 shrink-0" />
+          <span className="font-bold text-red-600 text-sm flex-1">รายจ่ายรวม</span>
+          <span className="text-sm font-bold text-red-600">{fmt(total)} ฿</span>
+          <span className="text-[10px] font-semibold text-cafe-muted bg-cafe-input border border-cafe-border rounded-full px-2 py-0.5">
+            {filtered.length} รายการ
+          </span>
+        </div>
+        {byIngredient.map((x, i) => (
+          <div key={x.name} className={`flex items-center px-4 lg:px-5 py-2.5 lg:py-3 text-sm ${i > 0 ? 'border-t border-cafe-border-light' : ''}`}>
+            <span className="flex-1 text-cafe-text font-medium">{x.name}</span>
+            <span className="text-cafe-muted text-xs mr-3">{x.count} ครั้ง</span>
+            <span className="font-semibold text-red-600">{fmt(x.total)} ฿</span>
+          </div>
+        ))}
+      </div>
+
+      {saleProfit > 0 && (
+        <div className={`rounded-xl px-4 py-3 flex items-center justify-between border ${net >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <div>
+            <p className={`text-xs font-semibold ${net >= 0 ? 'text-green-700' : 'text-red-600'}`}>กำไรหลังหักรายจ่าย</p>
+            <p className={`text-xl font-bold ${net >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmt(net)} ฿</p>
+          </div>
+          <div className={`text-right text-xs space-y-0.5 ${net >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            <p>กำไรขาย +{fmt(saleProfit)} ฿</p>
+            <p>รายจ่าย -{fmt(total)} ฿</p>
+          </div>
+        </div>
       )}
     </div>
   )

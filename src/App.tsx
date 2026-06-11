@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import type { User } from '@supabase/supabase-js'
-import { BarChart2, PenLine, Settings, Coffee, LogOut } from 'lucide-react'
+import { BarChart2, PenLine, ShoppingCart, Settings, Coffee, LogOut } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useStore } from './store/useStore'
 import { seedIfEmpty } from './utils/seedData'
@@ -9,14 +9,16 @@ import { ACCESS_TOKEN } from './config/token'
 import TopNav from './components/TopNav'
 import ReportScreen from './screens/ReportScreen'
 import SalesScreen from './screens/SalesScreen'
+import ExpenseScreen from './screens/ExpenseScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import LoginScreen from './screens/LoginScreen'
 import OnboardingScreen from './screens/OnboardingScreen'
 
 const NAV_TABS = [
-  { icon: BarChart2, label: 'รายงาน' },
-  { icon: PenLine,   label: 'บันทึกขาย' },
-  { icon: Settings,  label: 'ตั้งค่า' },
+  { icon: BarChart2,    label: 'รายงาน' },
+  { icon: PenLine,      label: 'บันทึกขาย' },
+  { icon: ShoppingCart, label: 'รายจ่าย' },
+  { icon: Settings,     label: 'ตั้งค่า' },
 ]
 
 type AuthState = 'checking' | 'unauthenticated' | 'onboarding' | 'ready'
@@ -101,7 +103,8 @@ export default function App() {
             >
               {page === 0 && <ReportScreen />}
               {page === 1 && <SalesScreen onNavigate={navigate} />}
-              {page === 2 && <SettingsScreen />}
+              {page === 2 && <ExpenseScreen />}
+              {page === 3 && <SettingsScreen />}
             </div>
           </main>
         </div>

@@ -29,3 +29,17 @@ export interface DailySale {
   platformId: string;
   items: SaleItem[];
 }
+
+export interface Ingredient {
+  id: string;
+  name: string;
+}
+
+export interface ExpenseEntry {
+  id: string;
+  ingredientId: string;
+  date: string; // "YYYY-MM-DD"
+  amount: number;
+  photoUrl: string | null;
+  note: string | null;
+}

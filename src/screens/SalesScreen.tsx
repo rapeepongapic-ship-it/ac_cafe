@@ -105,7 +105,7 @@ export default function SalesScreen({ onNavigate }: { onNavigate: (page: number)
             <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-700">
               ยังไม่มีแพลตฟอร์ม{' '}
-              <button onClick={() => onNavigate(2)} className="font-bold underline">ไปตั้งค่า</button>
+              <button onClick={() => onNavigate(3)} className="font-bold underline">ไปตั้งค่า</button>
             </p>
           </div>
         ) : (
@@ -279,7 +279,7 @@ function Onboarding({ onNavigate }: { onNavigate: (page: number) => void }) {
         ))}
       </div>
       <button
-        onClick={() => onNavigate(2)}
+        onClick={() => onNavigate(3)}
         className="w-full flex items-center justify-center gap-2 bg-cafe-accent hover:bg-cafe-accent-dark text-white font-bold py-4 rounded-xl shadow-md transition-colors"
       >
         ไปตั้งค่าเมนูเลย <ArrowRight size={16} />
