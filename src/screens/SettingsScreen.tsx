@@ -21,7 +21,7 @@ export default function SettingsScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {/* Header + stats */}
         <View style={styles.header}>
@@ -90,7 +90,7 @@ function MenuTab() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 90 }}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         {platforms.length === 0 && (
           <View style={styles.hintBox}>
             <Ionicons name="information-circle-outline" size={15} color="#92400E" style={{ marginRight: 6 }} />
@@ -204,7 +204,7 @@ function MenuForm({ platforms, initialItem, onSave, onCancel }: {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 90 }}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>{initialItem ? 'แก้ไขเมนู' : 'เพิ่มเมนูใหม่'}</Text>
 
@@ -294,7 +294,7 @@ function PlatformTab() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 90 }}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         {showForm ? (
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>{editItem ? 'แก้ไขแพลตฟอร์ม' : 'เพิ่มแพลตฟอร์ม'}</Text>

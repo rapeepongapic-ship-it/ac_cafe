@@ -95,8 +95,8 @@ export default function ReportScreen() {
   const hasData = summaries.length > 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 90 }}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
 
         <View style={styles.header}>
           <Text style={styles.title}>รายงาน</Text>
