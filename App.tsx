@@ -44,13 +44,14 @@ export default function App() {
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
+    ...(IS_WEB ? { minHeight: '100vh' as any } : {}),
     backgroundColor: IS_WEB ? '#C4A882' : colors.bg,
     alignItems: IS_WEB ? ('center' as any) : 'stretch',
+    justifyContent: 'flex-start',
   },
   frame: {
     flex: 1,
-    width: '100%' as any,
-    maxWidth: IS_WEB ? 430 : undefined,
+    width: IS_WEB ? ('min(100%, 430px)' as any) : '100%',
     backgroundColor: colors.bg,
     ...(IS_WEB ? ({ boxShadow: '0 4px 40px rgba(0,0,0,0.2)' } as any) : {}),
   },
