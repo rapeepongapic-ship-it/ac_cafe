@@ -1,4 +1,5 @@
 import { BarChart2, PenLine, Settings } from 'lucide-react'
+import { useStore } from '../store/useStore'
 
 const TABS = [
   { icon: BarChart2, label: 'รายงาน' },
@@ -12,8 +13,14 @@ interface Props {
 }
 
 export default function TopNav({ page, onNavigate }: Props) {
+  const { shopName } = useStore()
   return (
-    <div className="bg-cafe-card border-b border-cafe-border px-3 py-2 shadow-sm sticky top-0 z-10">
+    <div className="bg-cafe-card border-b border-cafe-border px-3 pt-2 pb-2 shadow-sm sticky top-0 z-10">
+      {shopName && (
+        <p className="text-[11px] font-semibold text-cafe-muted text-center mb-1.5 tracking-wide truncate">
+          {shopName}
+        </p>
+      )}
       <div className="flex gap-1 bg-cafe-input rounded-xl p-1 border border-cafe-border">
         {TABS.map((tab, i) => {
           const Icon = tab.icon

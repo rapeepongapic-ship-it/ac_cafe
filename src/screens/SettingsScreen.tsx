@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
-import { Plus, Pencil, Trash2, Store, Coffee, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Store, Coffee, ChevronDown, ChevronUp, AlertTriangle, LogOut } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { supabase } from '../lib/supabase'
 import type { MenuItem, Platform } from '../types'
 
 type Tab = 'menu' | 'platform'
@@ -35,8 +36,9 @@ export default function SettingsScreen() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 pb-8">
+      <div className="flex-1 overflow-y-auto p-4 pb-8 space-y-6">
         {tab === 'menu' ? <MenuTab /> : <PlatformTab />}
+        <SignOutButton />
       </div>
     </div>
   )
@@ -361,6 +363,24 @@ function FormActions({ onSave, onCancel }: { onSave: () => void; onCancel: () =>
         ยกเลิก
       </button>
     </div>
+  )
+}
+
+function SignOutButton() {
+  const { reset } = useStore()
+  const handleSignOut = async () => {
+    if (!confirm('ออกจากระบบ?')) return
+    reset()
+    await supabase.auth.signOut()
+  }
+  return (
+    <button
+      onClick={handleSignOut}
+      className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-500 hover:bg-red-50 font-semibold py-3 rounded-xl transition-colors"
+    >
+      <LogOut size={15} />
+      ออกจากระบบ
+    </button>
   )
 }
 
