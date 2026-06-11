@@ -29,8 +29,16 @@ export default function App() {
   const [allowed, setAllowed]     = useState<boolean | null>(null)
   const [authState, setAuthState] = useState<AuthState>('checking')
   const [user, setUser]           = useState<User | null>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebar-collapsed') === 'true'
+  )
   const prevPage                  = useRef(0)
   const { loadData, reset }       = useStore()
+
+  const toggleSidebar = () => setSidebarCollapsed(v => {
+    localStorage.setItem('sidebar-collapsed', String(!v))
+    return !v
+  })
 
   useEffect(() => {
     const path = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '')
@@ -88,15 +96,6 @@ export default function App() {
       />
     )
   }
-
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem('sidebar-collapsed') === 'true'
-  )
-
-  const toggleSidebar = () => setSidebarCollapsed(v => {
-    localStorage.setItem('sidebar-collapsed', String(!v))
-    return !v
-  })
 
   return (
     <div className="min-h-[100dvh] bg-cafe-bg">
