@@ -378,7 +378,7 @@ export default function ExpenseScreen() {
 
       {/* ── INGREDIENTS TAB ─────────────────────────────────────────────── */}
       {tab === 'ingredients' && (
-        <div className="space-y-3 lg:max-w-lg">
+        <div className="space-y-3">
           <div className="flex gap-2">
             <input
               type="text"
