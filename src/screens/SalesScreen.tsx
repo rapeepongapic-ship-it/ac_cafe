@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   menuPrice: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   qtyControl: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   qtyBtn: { width: 32, height: 32, borderRadius: radius.md, backgroundColor: colors.bgInput, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
-  qtyInput: { width: 50, backgroundColor: colors.bgInput, borderRadius: radius.sm, paddingVertical: 7, fontSize: 16, fontWeight: '700', color: colors.text, borderWidth: 1, borderColor: colors.border },
+  qtyInput: { width: 50, height: 36, backgroundColor: colors.bgInput, borderRadius: radius.sm, fontSize: 16, fontWeight: '700', color: colors.text, borderWidth: 1, borderColor: colors.border, textAlign: 'center', textAlignVertical: 'center' },
   qtyInputFilled: { backgroundColor: colors.bgSection, borderColor: colors.accent },
   btnSave: { flexDirection: 'row', backgroundColor: colors.accent, borderRadius: radius.lg, paddingVertical: 15, alignItems: 'center', justifyContent: 'center', marginTop: 12, ...shadow.md },
   btnSaveText: { color: '#fff', fontWeight: '700', fontSize: 16 },
