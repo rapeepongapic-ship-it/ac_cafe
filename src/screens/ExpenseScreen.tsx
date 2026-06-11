@@ -233,75 +233,82 @@ export default function ExpenseScreen() {
 
                   {/* Ingredient rows */}
                   <div className="space-y-2">
+                    {/* Column headers */}
+                    <div className="grid grid-cols-[1fr_auto_100px_36px] gap-2 px-1 pb-0.5">
+                      <p className="text-[10px] font-semibold text-cafe-muted uppercase tracking-widest">วัตถุดิบ</p>
+                      <p className="text-[10px] font-semibold text-cafe-muted uppercase tracking-widest">จำนวน</p>
+                      <p className="text-[10px] font-semibold text-cafe-muted uppercase tracking-widest">ราคา/ชิ้น</p>
+                      <span />
+                    </div>
+
                     {tripItems.map(row => {
                       const qty   = parseInt(row.quantity) || 1
                       const total = rowTotal(row)
                       return (
-                        <div key={row.rowId} className="bg-cafe-section border border-cafe-border rounded-xl p-3 space-y-2.5">
-                          {/* Row 1: ingredient + delete */}
-                          <div className="flex gap-2 items-center">
-                            <select
-                              value={row.ingredientId}
-                              onChange={e => updateRow(row.rowId, 'ingredientId', e.target.value)}
-                              className={`${inputCls} flex-1`}
-                            >
-                              <option value="">เลือกวัตถุดิบ</option>
-                              {ingredients.map(ing => (
-                                <option key={ing.id} value={ing.id}>{ing.name}</option>
-                              ))}
-                            </select>
+                        <div key={row.rowId} className="grid grid-cols-[1fr_auto_100px_36px] gap-2 items-center">
+                          {/* Ingredient */}
+                          <select
+                            value={row.ingredientId}
+                            onChange={e => updateRow(row.rowId, 'ingredientId', e.target.value)}
+                            className={`${inputCls} w-full`}
+                          >
+                            <option value="">เลือก...</option>
+                            {ingredients.map(ing => (
+                              <option key={ing.id} value={ing.id}>{ing.name}</option>
+                            ))}
+                          </select>
+
+                          {/* Qty stepper */}
+                          <div className="flex items-center gap-1 shrink-0">
                             <button
-                              onClick={() => removeRow(row.rowId)}
-                              disabled={tripItems.length === 1}
-                              className="p-1.5 text-red-400 hover:text-red-600 disabled:opacity-25 transition-colors cursor-pointer shrink-0"
+                              onClick={() => updateRow(row.rowId, 'quantity', String(Math.max(1, qty - 1)))}
+                              className="w-8 h-[42px] rounded-lg bg-cafe-card border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform cursor-pointer"
                             >
-                              <Trash2 size={14} />
+                              <Minus size={12} className="text-cafe-accent" />
+                            </button>
+                            <input
+                              type="number"
+                              value={row.quantity}
+                              onChange={e => updateRow(row.rowId, 'quantity', e.target.value)}
+                              min="1"
+                              className="w-10 h-[42px] text-center text-sm font-bold bg-cafe-card border border-cafe-border rounded-lg outline-none focus:border-cafe-accent text-cafe-text"
+                            />
+                            <button
+                              onClick={() => updateRow(row.rowId, 'quantity', String(qty + 1))}
+                              className="w-8 h-[42px] rounded-lg bg-cafe-card border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform cursor-pointer"
+                            >
+                              <Plus size={12} className="text-cafe-accent" />
                             </button>
                           </div>
 
-                          {/* Row 2: price/unit + qty stepper + subtotal */}
-                          <div className="flex gap-2 items-center">
-                            <div className="relative flex-1">
-                              <input
-                                type="number"
-                                value={row.pricePerUnit}
-                                onChange={e => updateRow(row.rowId, 'pricePerUnit', e.target.value)}
-                                placeholder="ราคา/หน่วย"
-                                min="0"
-                                className={`${inputCls} w-full pr-5`}
-                              />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-cafe-muted">฿</span>
-                            </div>
-
-                            {/* +/- stepper */}
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                onClick={() => updateRow(row.rowId, 'quantity', String(Math.max(1, qty - 1)))}
-                                className="w-8 h-9 rounded-lg bg-cafe-card border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform cursor-pointer"
-                              >
-                                <Minus size={12} className="text-cafe-accent" />
-                              </button>
-                              <input
-                                type="number"
-                                value={row.quantity}
-                                onChange={e => updateRow(row.rowId, 'quantity', e.target.value)}
-                                min="1"
-                                className="w-10 h-9 text-center text-sm font-bold bg-cafe-card border border-cafe-border rounded-lg outline-none focus:border-cafe-accent text-cafe-text"
-                              />
-                              <button
-                                onClick={() => updateRow(row.rowId, 'quantity', String(qty + 1))}
-                                className="w-8 h-9 rounded-lg bg-cafe-card border border-cafe-border flex items-center justify-center hover:bg-cafe-section active:scale-95 transition-transform cursor-pointer"
-                              >
-                                <Plus size={12} className="text-cafe-accent" />
-                              </button>
-                            </div>
-
-                            {total > 0 && (
-                              <span className="text-sm font-bold text-cafe-text shrink-0 w-20 text-right">
-                                {fmt(total)} ฿
-                              </span>
-                            )}
+                          {/* Price per unit */}
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={row.pricePerUnit}
+                              onChange={e => updateRow(row.rowId, 'pricePerUnit', e.target.value)}
+                              placeholder="0"
+                              min="0"
+                              className={`${inputCls} w-full pr-5 text-right`}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-cafe-muted">฿</span>
                           </div>
+
+                          {/* Delete */}
+                          <button
+                            onClick={() => removeRow(row.rowId)}
+                            disabled={tripItems.length === 1}
+                            className="h-[42px] w-9 flex items-center justify-center rounded-lg bg-red-50 border border-red-200 text-red-500 hover:bg-red-100 disabled:opacity-25 transition-colors cursor-pointer shrink-0"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+
+                          {/* Subtotal */}
+                          {total > 0 && (
+                            <div className="col-span-4 flex justify-end -mt-1">
+                              <span className="text-xs text-cafe-muted">= {fmt(total)} ฿</span>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

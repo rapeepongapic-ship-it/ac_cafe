@@ -80,70 +80,76 @@ export default function ReportScreen() {
     <div className="p-4 lg:px-8 lg:py-6 space-y-4 lg:space-y-5 pb-8">
       <h1 className="text-xl lg:text-2xl font-bold text-cafe-text pt-1">รายงาน</h1>
 
-      {/* Quick filter */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">ช่วงเวลา</p>
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
-                filter === f.key
-                  ? 'bg-cafe-accent border-cafe-accent text-white'
-                  : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+      {/* Quick filter + Platform filter — same row on desktop */}
+      <div className="lg:flex lg:items-start lg:gap-6">
+        {/* Period */}
+        <div className="space-y-2 lg:flex-1">
+          <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">ช่วงเวลา</p>
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
+                  filter === f.key
+                    ? 'bg-cafe-accent border-cafe-accent text-white'
+                    : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {filter === 'custom' && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="text" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                placeholder="YYYY-MM-DD"
+                className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none"
+              />
+              <span className="text-cafe-muted text-sm">→</span>
+              <input
+                type="text" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                placeholder="YYYY-MM-DD"
+                className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none"
+              />
+            </div>
+          )}
         </div>
-        {filter === 'custom' && (
-          <div className="flex gap-2 items-center">
-            <input
-              type="text" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-              placeholder="YYYY-MM-DD"
-              className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none"
-            />
-            <span className="text-cafe-muted text-sm">→</span>
-            <input
-              type="text" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
-              placeholder="YYYY-MM-DD"
-              className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none"
-            />
+
+        {/* Platform filter */}
+        {platforms.length > 1 && (
+          <div className="space-y-2 mt-4 lg:mt-0 lg:shrink-0">
+            <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">แพลตฟอร์ม</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setPlatformFilter('all')}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
+                  platformFilter === 'all'
+                    ? 'bg-cafe-accent border-cafe-accent text-white'
+                    : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+                }`}
+              >
+                ทุกแพลตฟอร์ม
+              </button>
+              {platforms.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPlatformFilter(p.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
+                    platformFilter === p.id
+                      ? 'bg-cafe-accent border-cafe-accent text-white'
+                      : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+                  }`}
+                >
+                  <Store size={12} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Platform filter */}
-      {platforms.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setPlatformFilter('all')}
-            className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
-              platformFilter === 'all'
-                ? 'bg-cafe-accent border-cafe-accent text-white'
-                : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
-            }`}
-          >
-            ทุกแพลตฟอร์ม
-          </button>
-          {platforms.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPlatformFilter(p.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
-                platformFilter === p.id
-                  ? 'bg-cafe-accent border-cafe-accent text-white'
-                  : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
-              }`}
-            >
-              <Store size={12} />
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* No data */}
       {summaries.length === 0 ? (
