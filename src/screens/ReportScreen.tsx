@@ -149,7 +149,6 @@ export default function ReportScreen() {
                 style={[styles.chip, platformFilter === 'all' && styles.chipActive]}
                 onPress={() => setPlatformFilter('all')} activeOpacity={0.8}
               >
-                <Ionicons name={platformFilter === 'all' ? 'layers' : 'layers-outline'} size={12} color={platformFilter === 'all' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
                 <Text style={[styles.chipText, platformFilter === 'all' && styles.chipTextActive]}>ทั้งหมด</Text>
               </TouchableOpacity>
               {platforms.map((p) => (
@@ -158,7 +157,6 @@ export default function ReportScreen() {
                   style={[styles.chip, platformFilter === p.id && styles.chipActive]}
                   onPress={() => setPlatformFilter(p.id)} activeOpacity={0.8}
                 >
-                  <Ionicons name={platformFilter === p.id ? 'storefront' : 'storefront-outline'} size={12} color={platformFilter === p.id ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
                   <Text style={[styles.chipText, platformFilter === p.id && styles.chipTextActive]}>{p.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -405,7 +403,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 },
 
   // Filters
-  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.bgCard, marginRight: 8, borderWidth: 1, borderColor: colors.border },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.bgCard, marginRight: 8, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   chipTextActive: { color: '#fff' },

@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PageContext } from './src/context/PageContext';
 import FloatingNav from './src/components/FloatingNav';
+import WebTokenGuard from './src/components/WebTokenGuard';
 import ReportScreen from './src/screens/ReportScreen';
 import SalesScreen from './src/screens/SalesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -32,25 +33,27 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <PageContext.Provider value={{ currentPage, navigateTo }}>
-        <View style={styles.container}>
-          <ScrollView
-            ref={scrollRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            scrollEventThrottle={16}
-            onMomentumScrollEnd={handleScroll}
-            style={styles.pager}
-            contentContainerStyle={styles.pagerContent}
-          >
-            <View style={styles.page}><ReportScreen /></View>
-            <View style={styles.page}><SalesScreen /></View>
-            <View style={styles.page}><SettingsScreen /></View>
-          </ScrollView>
-          <FloatingNav />
-        </View>
-      </PageContext.Provider>
+      <WebTokenGuard>
+        <PageContext.Provider value={{ currentPage, navigateTo }}>
+          <View style={styles.container}>
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={handleScroll}
+              style={styles.pager}
+              contentContainerStyle={styles.pagerContent}
+            >
+              <View style={styles.page}><ReportScreen /></View>
+              <View style={styles.page}><SalesScreen /></View>
+              <View style={styles.page}><SettingsScreen /></View>
+            </ScrollView>
+            <FloatingNav />
+          </View>
+        </PageContext.Provider>
+      </WebTokenGuard>
     </SafeAreaProvider>
   );
 }
