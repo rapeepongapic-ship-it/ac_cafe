@@ -1,88 +1,72 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { format, startOfMonth, endOfMonth, subDays, parseISO, isWithinInterval } from 'date-fns';
-import { th } from 'date-fns/locale';
-import { useStore } from '../store/useStore';
-import { calcPlatformSummary, MenuRowData } from '../utils/calculations';
-import { colors, radius, shadow, space } from '../utils/theme';
+import { useState, useMemo } from 'react'
+import { format, startOfMonth, endOfMonth, subDays, parseISO, isWithinInterval } from 'date-fns'
+import { TrendingUp, TrendingDown, Store } from 'lucide-react'
+import { useStore } from '../store/useStore'
+import { calcPlatformSummary } from '../utils/calculations'
 
-type QuickFilter = 'today' | 'week' | 'month' | 'last_month' | 'custom';
+type QuickFilter = 'today' | 'week' | 'month' | 'last_month' | 'custom'
 
-const QUICK_FILTERS: { key: QuickFilter; label: string }[] = [
-  { key: 'today',      label: 'วันนี้'        },
-  { key: 'week',       label: '7 วัน'        },
-  { key: 'month',      label: 'เดือนนี้'     },
+const FILTERS: { key: QuickFilter; label: string }[] = [
+  { key: 'today',      label: 'วันนี้' },
+  { key: 'week',       label: '7 วัน' },
+  { key: 'month',      label: 'เดือนนี้' },
   { key: 'last_month', label: 'เดือนที่แล้ว' },
-  { key: 'custom',     label: 'กำหนดเอง'     },
-];
+  { key: 'custom',     label: 'กำหนดเอง' },
+]
 
-function getDateRange(filter: QuickFilter, customFrom: string, customTo: string) {
-  const now = new Date();
+function getRange(filter: QuickFilter, from: string, to: string) {
+  const now = new Date()
   switch (filter) {
-    case 'today':      return { from: new Date(format(now, 'yyyy-MM-dd')), to: new Date(format(now, 'yyyy-MM-dd') + 'T23:59:59') };
-    case 'week':       return { from: subDays(now, 6), to: now };
-    case 'month':      return { from: startOfMonth(now), to: endOfMonth(now) };
-    case 'last_month': { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return { from: startOfMonth(d), to: endOfMonth(d) }; }
-    case 'custom': {
+    case 'today':
+      return { from: new Date(format(now, 'yyyy-MM-dd')), to: new Date(format(now, 'yyyy-MM-dd') + 'T23:59:59') }
+    case 'week':
+      return { from: subDays(now, 6), to: now }
+    case 'month':
+      return { from: startOfMonth(now), to: endOfMonth(now) }
+    case 'last_month': {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      return { from: startOfMonth(d), to: endOfMonth(d) }
+    }
+    case 'custom':
       try {
         return {
-          from: customFrom ? parseISO(customFrom) : startOfMonth(now),
-          to:   customTo   ? new Date(customTo + 'T23:59:59') : endOfMonth(now),
-        };
-      } catch { return { from: startOfMonth(now), to: endOfMonth(now) }; }
-    }
+          from: from ? parseISO(from) : startOfMonth(now),
+          to:   to   ? new Date(to + 'T23:59:59') : endOfMonth(now),
+        }
+      } catch { return { from: startOfMonth(now), to: endOfMonth(now) } }
   }
 }
 
-export default function ReportScreen() {
-  const { sales, platforms, menuItems } = useStore();
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>('month');
-  const [customFrom, setCustomFrom] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [customTo,   setCustomTo]   = useState(() => format(new Date(), 'yyyy-MM-dd'));
-  const [platformFilter, setPlatformFilter] = useState<string>('all');
+const fmt = (n: number) => n.toLocaleString()
 
-  const { from, to } = getDateRange(quickFilter, customFrom, customTo);
+export default function ReportScreen() {
+  const { sales, platforms, menuItems } = useStore()
+  const [filter, setFilter]             = useState<QuickFilter>('month')
+  const [customFrom, setCustomFrom]     = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'))
+  const [customTo, setCustomTo]         = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [platformFilter, setPlatformFilter] = useState('all')
+
+  const { from, to } = getRange(filter, customFrom, customTo)
 
   const filteredSales = useMemo(() =>
     sales.filter((s) => {
-      const d = parseISO(s.date);
-      const inRange = isWithinInterval(d, { start: from, end: to });
-      const inPlatform = platformFilter === 'all' || s.platformId === platformFilter;
-      return inRange && inPlatform;
+      const d = parseISO(s.date)
+      return isWithinInterval(d, { start: from, end: to }) &&
+        (platformFilter === 'all' || s.platformId === platformFilter)
     }),
     [sales, from, to, platformFilter]
-  );
+  )
 
-  const activePlatforms = platformFilter === 'all' ? platforms : platforms.filter((p) => p.id === platformFilter);
+  const activePlatforms = platformFilter === 'all'
+    ? platforms
+    : platforms.filter((p) => p.id === platformFilter)
 
   const summaries = useMemo(() =>
     activePlatforms
       .map((p) => calcPlatformSummary(filteredSales, p, menuItems))
       .filter((s) => s.rows.length > 0),
     [filteredSales, activePlatforms, menuItems]
-  );
-
-  // Combined rows for "all" view
-  const combinedRows = useMemo(() => {
-    const merged: Record<string, { menuItemId: string; name: string; qty: number; revenue: number; cost: number; fee: number; profit: number }> = {};
-    summaries.forEach((s) => {
-      s.rows.forEach((row) => {
-        if (!merged[row.menuItemId]) {
-          merged[row.menuItemId] = { menuItemId: row.menuItemId, name: row.name, qty: 0, revenue: 0, cost: 0, fee: 0, profit: 0 };
-        }
-        merged[row.menuItemId].qty     += row.quantity;
-        merged[row.menuItemId].revenue += row.revenue;
-        merged[row.menuItemId].cost    += row.costDeduct;
-        merged[row.menuItemId].fee     += row.feeDeduct;
-        merged[row.menuItemId].profit  += row.profit;
-      });
-    });
-    return Object.values(merged);
-  }, [summaries]);
+  )
 
   const grand = useMemo(() => ({
     qty:     summaries.reduce((s, p) => s + p.totalQty, 0),
@@ -90,373 +74,188 @@ export default function ReportScreen() {
     cost:    summaries.reduce((s, p) => s + p.totalCost, 0),
     fee:     summaries.reduce((s, p) => s + p.totalFee, 0),
     profit:  summaries.reduce((s, p) => s + p.totalProfit, 0),
-  }), [summaries]);
-
-  const hasData = summaries.length > 0;
+  }), [summaries])
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
+    <div className="p-4 space-y-4 pb-8">
+      <h1 className="text-xl font-bold text-cafe-text pt-1">รายงาน</h1>
 
-        <View style={styles.header}>
-          <Text style={styles.title}>รายงาน</Text>
-        </View>
+      {/* Quick filter */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">ช่วงเวลา</p>
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
+                filter === f.key
+                  ? 'bg-cafe-accent border-cafe-accent text-white'
+                  : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {filter === 'custom' && (
+          <div className="flex gap-2 items-center">
+            <input
+              type="text" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+              placeholder="YYYY-MM-DD"
+              className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none"
+            />
+            <span className="text-cafe-muted text-sm">→</span>
+            <input
+              type="text" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+              placeholder="YYYY-MM-DD"
+              className="flex-1 bg-cafe-card border border-cafe-border rounded-xl px-3 py-2 text-sm text-cafe-text outline-none"
+            />
+          </div>
+        )}
+      </div>
 
-        {/* Date filters */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ช่วงเวลา</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {QUICK_FILTERS.map((f) => (
-              <TouchableOpacity
-                key={f.key}
-                style={[styles.chip, quickFilter === f.key && styles.chipActive]}
-                onPress={() => setQuickFilter(f.key)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, quickFilter === f.key && styles.chipTextActive]}>{f.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+      {/* Platform filter */}
+      {platforms.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+          <button
+            onClick={() => setPlatformFilter('all')}
+            className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
+              platformFilter === 'all'
+                ? 'bg-cafe-accent border-cafe-accent text-white'
+                : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+            }`}
+          >
+            ทุกแพลตฟอร์ม
+          </button>
+          {platforms.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setPlatformFilter(p.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
+                platformFilter === p.id
+                  ? 'bg-cafe-accent border-cafe-accent text-white'
+                  : 'bg-cafe-card border-cafe-border text-cafe-text-2 hover:bg-cafe-section'
+              }`}
+            >
+              <Store size={12} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
-          {quickFilter === 'custom' && (
-            <View style={styles.customDateRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>จาก</Text>
-                <TextInput style={styles.dateInput} value={customFrom} onChangeText={setCustomFrom} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
-              </View>
-              <Ionicons name="arrow-forward" size={16} color={colors.textMuted} style={{ marginTop: 22, marginHorizontal: 8 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>ถึง</Text>
-                <TextInput style={styles.dateInput} value={customTo} onChangeText={setCustomTo} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
-              </View>
-            </View>
-          )}
+      {/* No data */}
+      {summaries.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <span className="text-5xl mb-4">📊</span>
+          <p className="text-cafe-text-2 font-semibold mb-1">ยังไม่มีข้อมูลในช่วงนี้</p>
+          <p className="text-cafe-muted text-sm">บันทึกยอดขายในแท็บ "บันทึกขาย"</p>
+        </div>
+      ) : (
+        <>
+          {/* Grand summary cards */}
+          <div className="grid grid-cols-2 gap-2">
+            <StatCard label="รายได้รวม"  value={`${fmt(grand.revenue)} ฿`} sub={`${fmt(grand.qty)} แก้ว`} />
+            <StatCard
+              label="กำไรสุทธิ"
+              value={`${fmt(grand.profit)} ฿`}
+              sub={grand.revenue > 0 ? `${Math.round(grand.profit / grand.revenue * 100)}%` : '-'}
+              positive={grand.profit >= 0}
+            />
+            <StatCard label="ต้นทุนรวม" value={`${fmt(grand.cost)} ฿`}  sub="" dim />
+            <StatCard label="ค่าธรรมเนียม" value={`${fmt(grand.fee)} ฿`} sub="" dim />
+          </div>
 
-          <View style={styles.dateRangeRow}>
-            <Ionicons name="calendar-outline" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
-            <Text style={styles.dateRangeText}>
-              {format(from, 'd MMM', { locale: th })} – {format(to, 'd MMM yyyy', { locale: th })}
-            </Text>
-          </View>
-        </View>
+          {/* Per-platform tables */}
+          {summaries.map((s) => (
+            <div key={s.platform.id} className="bg-cafe-card border border-cafe-border rounded-xl overflow-hidden shadow-sm">
+              {/* Platform header */}
+              <div className="flex items-center gap-2 px-4 py-3 bg-cafe-section border-b border-cafe-border">
+                <Store size={14} className="text-cafe-accent" />
+                <span className="font-bold text-cafe-accent text-sm flex-1">{s.platform.name}</span>
+                {s.platform.feePercent > 0 && (
+                  <span className="text-[10px] font-semibold text-cafe-muted bg-cafe-input border border-cafe-border rounded-full px-2 py-0.5">
+                    หัก {s.platform.feePercent}% {s.platform.feeLabel}
+                  </span>
+                )}
+              </div>
 
-        {/* Platform filter */}
-        {platforms.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>แพลตฟอร์ม</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <TouchableOpacity
-                style={[styles.chip, platformFilter === 'all' && styles.chipActive]}
-                onPress={() => setPlatformFilter('all')} activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, platformFilter === 'all' && styles.chipTextActive]}>ทั้งหมด</Text>
-              </TouchableOpacity>
-              {platforms.map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.chip, platformFilter === p.id && styles.chipActive]}
-                  onPress={() => setPlatformFilter(p.id)} activeOpacity={0.8}
+              {/* Table header */}
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2 bg-cafe-input/50 text-[10px] font-semibold text-cafe-muted uppercase tracking-wide">
+                <span>เมนู</span>
+                <span className="text-right w-10">แก้ว</span>
+                <span className="text-right w-14">รายได้</span>
+                {s.platform.feePercent > 0 && <span className="text-right w-12">ค่า GP</span>}
+                <span className="text-right w-14">กำไร</span>
+              </div>
+
+              {/* Rows */}
+              {s.rows.map((row) => (
+                <div
+                  key={row.menuItemId}
+                  className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 border-t border-cafe-border-light text-sm"
                 >
-                  <Text style={[styles.chipText, platformFilter === p.id && styles.chipTextActive]}>{p.name}</Text>
-                </TouchableOpacity>
+                  <span className="text-cafe-text font-medium truncate">{row.name}</span>
+                  <span className="text-right w-10 text-cafe-text-2">{row.quantity}</span>
+                  <span className="text-right w-14 text-cafe-text-2">{fmt(row.revenue)}</span>
+                  {s.platform.feePercent > 0 && (
+                    <span className="text-right w-12 text-cafe-muted">-{fmt(row.feeDeduct)}</span>
+                  )}
+                  <span className={`text-right w-14 font-semibold ${row.profit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {fmt(row.profit)}
+                  </span>
+                </div>
               ))}
-            </ScrollView>
-          </View>
-        )}
 
-        {/* 3 top stat cards */}
-        <View style={styles.statRow}>
-          <StatCard icon="cash-outline"       label="รายได้รวม" value={grand.revenue} suffix="฿" />
-          <StatCard icon="cafe-outline"        label="แก้วรวม"   value={grand.qty}     suffix="แก้ว" />
-          <StatCard icon="trending-up-outline" label="กำไรสุทธิ" value={grand.profit}  suffix="฿" profit={grand.profit} />
-        </View>
+              {/* Platform total */}
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 border-t border-cafe-border bg-cafe-section text-sm font-bold">
+                <span className="text-cafe-text-2">รวม</span>
+                <span className="text-right w-10 text-cafe-text">{s.totalQty}</span>
+                <span className="text-right w-14 text-cafe-text">{fmt(s.totalRevenue)}</span>
+                {s.platform.feePercent > 0 && (
+                  <span className="text-right w-12 text-cafe-muted">-{fmt(s.totalFee)}</span>
+                )}
+                <span className={`text-right w-14 ${s.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  {fmt(s.totalProfit)}
+                </span>
+              </div>
+            </div>
+          ))}
 
-        {/* Table content */}
-        {!hasData ? (
-          <EmptyState />
-        ) : platformFilter === 'all' ? (
-          <CombinedSection rows={combinedRows} grand={grand} />
-        ) : (
-          summaries.map((summary) => (
-            <PlatformSection key={summary.platform.id} summary={summary} />
-          ))
-        )}
-
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-// ─── Combined section (ทั้งหมด) ───────────────────────────────────────────────
-
-function CombinedSection({ rows, grand }: {
-  rows: { menuItemId: string; name: string; qty: number; revenue: number; cost: number; fee: number; profit: number }[];
-  grand: { qty: number; revenue: number; cost: number; fee: number; profit: number };
-}) {
-  const hasFee = grand.fee > 0;
-  return (
-    <View style={styles.platformBlock}>
-      {/* Section header */}
-      <View style={styles.platformHeaderRow}>
-        <View style={styles.platformHeaderLeft}>
-          <Ionicons name="layers" size={15} color={colors.accent} style={{ marginRight: 6 }} />
-          <Text style={styles.platformTitle}>ทุก Platform</Text>
-        </View>
-        <View style={styles.qtyBadge}>
-          <Text style={styles.qtyBadgeText}>{grand.qty} แก้ว</Text>
-        </View>
-      </View>
-
-      {/* Column header */}
-      <ColumnHeader hasFee={hasFee} feeLabel="ค่าธรรมเนียม" />
-
-      {/* Menu rows */}
-      {rows.map((row, i) => (
-        <CombinedMenuRow key={row.menuItemId} row={row} hasFee={hasFee} isLast={i === rows.length - 1} />
-      ))}
-
-      {/* Summary row */}
-      <SummaryRow
-        hasFee={hasFee}
-        qty={grand.qty} revenue={grand.revenue} cost={grand.cost} fee={grand.fee} profit={grand.profit}
-        margin={grand.revenue > 0 ? Math.round((grand.profit / grand.revenue) * 100) : 0}
-      />
-    </View>
-  );
-}
-
-// ─── Per-platform section ─────────────────────────────────────────────────────
-
-function PlatformSection({ summary }: { summary: ReturnType<typeof calcPlatformSummary> }) {
-  const { platform, rows, totalQty, totalRevenue, totalCost, totalFee, totalProfit } = summary;
-  const hasFee = platform.feePercent > 0;
-  const margin = totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0;
-  return (
-    <View style={styles.platformBlock}>
-      {/* Section header */}
-      <View style={styles.platformHeaderRow}>
-        <View style={styles.platformHeaderLeft}>
-          <Ionicons name="storefront" size={15} color={colors.accent} style={{ marginRight: 6 }} />
-          <Text style={styles.platformTitle}>{platform.name}</Text>
-          {hasFee && (
-            <View style={styles.feeBadge}>
-              <Text style={styles.feeBadgeText}>หัก {platform.feePercent}%</Text>
-            </View>
+          {/* Grand total row */}
+          {summaries.length > 1 && (
+            <div className="bg-cafe-accent text-white rounded-xl px-4 py-3 flex items-center gap-3">
+              {grand.profit >= 0
+                ? <TrendingUp size={20} className="shrink-0" />
+                : <TrendingDown size={20} className="shrink-0" />
+              }
+              <div className="flex-1">
+                <p className="text-xs font-semibold opacity-80">กำไรสุทธิรวมทุก platform</p>
+                <p className="text-xl font-bold">{fmt(grand.profit)} ฿</p>
+              </div>
+              <div className="text-right text-xs opacity-80 space-y-0.5">
+                <p>{fmt(grand.qty)} แก้ว</p>
+                <p>รายได้ {fmt(grand.revenue)} ฿</p>
+              </div>
+            </div>
           )}
-        </View>
-        <View style={styles.qtyBadge}>
-          <Text style={styles.qtyBadgeText}>{totalQty} แก้ว</Text>
-        </View>
-      </View>
-
-      {/* Column header */}
-      <ColumnHeader hasFee={hasFee} feeLabel={hasFee ? `หัก ${platform.feePercent}%` : ''} />
-
-      {/* Menu rows */}
-      {rows.map((row, i) => (
-        <MenuItemRow key={row.menuItemId} row={row} hasFee={hasFee} isLast={i === rows.length - 1} />
-      ))}
-
-      {/* Summary row */}
-      <SummaryRow
-        hasFee={hasFee}
-        qty={totalQty} revenue={totalRevenue} cost={totalCost} fee={totalFee} profit={totalProfit}
-        margin={margin}
-      />
-    </View>
-  );
-}
-
-// ─── Table sub-components ─────────────────────────────────────────────────────
-
-function ColumnHeader({ hasFee, feeLabel }: { hasFee: boolean; feeLabel: string }) {
-  return (
-    <View style={[styles.tableRow, styles.colHeaderRow]}>
-      <Text style={[styles.colHeader, { flex: 2.2 }]}>เมนู</Text>
-      <Text style={[styles.colHeader, styles.colRight, { flex: 0.9 }]}>แก้ว</Text>
-      <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>รายได้</Text>
-      <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>หักต้นทุน</Text>
-      {hasFee && <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>{feeLabel}</Text>}
-      <Text style={[styles.colHeader, styles.colRight, { flex: 1.5 }]}>กำไร</Text>
-    </View>
-  );
-}
-
-function MenuItemRow({ row, hasFee, isLast }: { row: MenuRowData; hasFee: boolean; isLast: boolean }) {
-  return (
-    <View style={[styles.tableRow, styles.dataRow, isLast && styles.lastDataRow]}>
-      <Text style={[styles.cellName, { flex: 2.2 }]} numberOfLines={2}>{row.name}</Text>
-      <Text style={[styles.cellNum, { flex: 0.9 }]}>{row.quantity}</Text>
-      <Text style={[styles.cellNum, { flex: 1.5 }]}>{row.revenue.toLocaleString()}</Text>
-      <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
-        {row.costDeduct > 0 ? `-${row.costDeduct.toLocaleString()}` : '–'}
-      </Text>
-      {hasFee && (
-        <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
-          {row.feeDeduct > 0 ? `-${row.feeDeduct.toLocaleString()}` : '–'}
-        </Text>
+        </>
       )}
-      <Text style={[styles.cellNum, row.profit > 0 ? styles.cellProfit : row.profit < 0 ? styles.cellNeg : null, { flex: 1.5 }]}>
-        {row.profit.toLocaleString()}
-      </Text>
-    </View>
-  );
+    </div>
+  )
 }
 
-function CombinedMenuRow({ row, hasFee, isLast }: {
-  row: { menuItemId: string; name: string; qty: number; revenue: number; cost: number; fee: number; profit: number };
-  hasFee: boolean; isLast: boolean;
+function StatCard({ label, value, sub, positive, dim }: {
+  label: string; value: string; sub: string; positive?: boolean; dim?: boolean
 }) {
   return (
-    <View style={[styles.tableRow, styles.dataRow, isLast && styles.lastDataRow]}>
-      <Text style={[styles.cellName, { flex: 2.2 }]} numberOfLines={2}>{row.name}</Text>
-      <Text style={[styles.cellNum, { flex: 0.9 }]}>{row.qty}</Text>
-      <Text style={[styles.cellNum, { flex: 1.5 }]}>{row.revenue.toLocaleString()}</Text>
-      <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
-        {row.cost > 0 ? `-${row.cost.toLocaleString()}` : '–'}
-      </Text>
-      {hasFee && (
-        <Text style={[styles.cellNum, styles.cellNeg, { flex: 1.5 }]}>
-          {row.fee > 0 ? `-${row.fee.toLocaleString()}` : '–'}
-        </Text>
-      )}
-      <Text style={[styles.cellNum, row.profit > 0 ? styles.cellProfit : row.profit < 0 ? styles.cellNeg : null, { flex: 1.5 }]}>
-        {row.profit.toLocaleString()}
-      </Text>
-    </View>
-  );
+    <div className="bg-cafe-card border border-cafe-border rounded-xl px-3 py-3 shadow-sm">
+      <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-wide mb-1">{label}</p>
+      <p className={`text-lg font-bold ${dim ? 'text-cafe-text-2' : positive === false ? 'text-red-600' : positive ? 'text-green-700' : 'text-cafe-text'}`}>
+        {value}
+      </p>
+      {sub && <p className="text-xs text-cafe-muted mt-0.5">{sub}</p>}
+    </div>
+  )
 }
-
-function SummaryRow({ hasFee, qty, revenue, cost, fee, profit, margin }: {
-  hasFee: boolean; qty: number; revenue: number; cost: number; fee: number; profit: number; margin: number;
-}) {
-  return (
-    <View style={styles.summaryRow}>
-      <View style={styles.summaryLeft}>
-        <Text style={styles.summaryLabel}>สรุป</Text>
-        <Text style={styles.summaryQty}>{qty} แก้ว</Text>
-      </View>
-      <View style={styles.summaryRight}>
-        <SummaryPill label="รายได้" value={revenue} />
-        <SummaryPill label="หักต้นทุน" value={-cost} neg />
-        {hasFee && fee > 0 && <SummaryPill label="ค่าธรรมเนียม" value={-fee} neg />}
-        <SummaryPill label="กำไร" value={profit} profit={profit} />
-      </View>
-      {revenue > 0 && (
-        <View style={styles.marginRow}>
-          <Text style={styles.marginText}>Margin {margin}%</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-function SummaryPill({ label, value, neg, profit }: { label: string; value: number; neg?: boolean; profit?: number }) {
-  const textColor = profit !== undefined
-    ? (profit > 0 ? colors.success : profit < 0 ? colors.danger : colors.text)
-    : neg ? colors.danger : colors.text;
-  return (
-    <View style={styles.summaryPill}>
-      <Text style={styles.summaryPillLabel}>{label}</Text>
-      <Text style={[styles.summaryPillValue, { color: textColor }]}>
-        {value >= 0 ? '' : ''}{value.toLocaleString()} ฿
-      </Text>
-    </View>
-  );
-}
-
-function StatCard({ icon, label, value, suffix, profit }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string; value: number; suffix: string; profit?: number;
-}) {
-  const valueColor = profit !== undefined
-    ? (profit > 0 ? colors.success : profit < 0 ? colors.danger : colors.text)
-    : colors.text;
-  return (
-    <View style={styles.statCard}>
-      <Ionicons name={icon} size={16} color={colors.accent} style={{ marginBottom: 4 }} />
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, { color: valueColor }]}>
-        {value.toLocaleString()} <Text style={styles.statSuffix}>{suffix}</Text>
-      </Text>
-    </View>
-  );
-}
-
-function EmptyState() {
-  return (
-    <View style={styles.emptyBox}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons name="bar-chart-outline" size={40} color={colors.textMuted} />
-      </View>
-      <Text style={styles.emptyTitle}>ไม่มีข้อมูลการขาย</Text>
-      <Text style={styles.emptySubtitle}>ในช่วงเวลาและ platform ที่เลือก</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.xs },
-  title: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
-  section: { paddingHorizontal: space.md, marginBottom: space.md },
-  sectionLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 },
-
-  // Filters
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.bgCard, marginRight: 8, borderWidth: 1, borderColor: colors.border },
-  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  chipTextActive: { color: '#fff' },
-  customDateRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 10 },
-  inputLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 },
-  dateInput: { backgroundColor: colors.bgCard, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.text, borderWidth: 1, borderColor: colors.border },
-  dateRangeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 7 },
-  dateRangeText: { fontSize: 12, color: colors.textMuted },
-
-  // Stat cards
-  statRow: { flexDirection: 'row', paddingHorizontal: space.md, gap: space.sm, marginBottom: space.md },
-  statCard: { flex: 1, backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: colors.border, ...shadow.sm },
-  statLabel: { fontSize: 10, color: colors.textMuted, textAlign: 'center', marginBottom: 2 },
-  statValue: { fontSize: 14, fontWeight: '700', color: colors.text, textAlign: 'center' },
-  statSuffix: { fontSize: 11, fontWeight: '400', color: colors.textMuted },
-
-  // Platform block
-  platformBlock: { marginHorizontal: space.md, marginBottom: space.lg, backgroundColor: colors.bgCard, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', ...shadow.sm },
-  platformHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.bgSection },
-  platformHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  platformTitle: { fontSize: 15, fontWeight: '700', color: colors.accent },
-  feeBadge: { marginLeft: 8, backgroundColor: colors.bgInput, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
-  feeBadgeText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
-  qtyBadge: { backgroundColor: colors.bgCard, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
-  qtyBadgeText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-
-  // Table rows
-  tableRow: { flexDirection: 'row', alignItems: 'center' },
-  colHeaderRow: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.tableHeader, borderBottomWidth: 1, borderBottomColor: colors.border },
-  colHeader: { fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
-  colRight: { textAlign: 'right' },
-  dataRow: { paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  lastDataRow: { borderBottomWidth: 0 },
-  cellName: { fontSize: 13, fontWeight: '600', color: colors.text, paddingRight: 6 },
-  cellNum: { fontSize: 13, color: colors.text, textAlign: 'right', fontVariant: ['tabular-nums'] as any },
-  cellNeg: { color: colors.danger },
-  cellProfit: { color: colors.success, fontWeight: '700' },
-
-  // Summary row
-  summaryRow: { backgroundColor: colors.summaryRow, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
-  summaryLeft: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  summaryLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginRight: 8 },
-  summaryQty: { fontSize: 12, color: colors.textMuted },
-  summaryRight: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  summaryPill: { backgroundColor: colors.bgCard, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  summaryPillLabel: { fontSize: 10, color: colors.textMuted, marginBottom: 1 },
-  summaryPillValue: { fontSize: 13, fontWeight: '700', color: colors.text },
-  marginRow: { marginTop: 8 },
-  marginText: { fontSize: 11, color: colors.textMuted },
-
-  // Empty
-  emptyBox: { alignItems: 'center', paddingTop: 40 },
-  emptyIconWrap: { width: 72, height: 72, borderRadius: radius.full, backgroundColor: colors.bgInput, alignItems: 'center', justifyContent: 'center', marginBottom: space.md, borderWidth: 1, borderColor: colors.border },
-  emptyTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 6 },
-  emptySubtitle: { fontSize: 13, color: colors.textMuted },
-});

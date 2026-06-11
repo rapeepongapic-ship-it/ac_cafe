@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MenuItem, Platform, DailySale } from '../types';
 
 interface Store {
@@ -59,7 +58,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'ac-cafe-store-v2',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );
