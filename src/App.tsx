@@ -38,7 +38,7 @@ export default function App() {
   useEffect(() => {
     if (!allowed) return
 
-    const initAuth = async (u: User | null) => {
+    const initAuth = async (u: User | null, doAudit = false) => {
       if (!u) { reset(); setAuthState('unauthenticated'); return }
       setUser(u)
       const { data: profile } = await supabase
@@ -47,12 +47,16 @@ export default function App() {
       await loadData(u.id, profile.shop_name)
       await seedIfEmpty(u.id)
       setAuthState('ready')
-      logAudit(u.id)
+      if (doAudit) logAudit(u.id)
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => initAuth(session?.user ?? null))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      initAuth(session?.user ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        reset()
+        setAuthState('unauthenticated')
+        return
+      }
+      initAuth(session?.user ?? null, event === 'SIGNED_IN')
     })
     return () => subscription.unsubscribe()
   }, [allowed])
