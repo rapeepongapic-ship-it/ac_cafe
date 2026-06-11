@@ -1,5 +1,5 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PageContext } from './src/context/PageContext';
@@ -11,46 +11,29 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import { seedIfEmpty } from './src/utils/seedData';
 import { colors } from './src/utils/theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Seed default data once on startup
 seedIfEmpty();
 
+const IS_WEB = Platform.OS === 'web';
+
 export default function App() {
-  const scrollRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState(0);
 
   const navigateTo = useCallback((page: number) => {
-    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: true });
     setCurrentPage(page);
   }, []);
-
-  const handleScroll = useCallback((e: any) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    if (page !== currentPage) setCurrentPage(page);
-  }, [currentPage]);
 
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <WebTokenGuard>
         <PageContext.Provider value={{ currentPage, navigateTo }}>
-          <View style={styles.container}>
-            <ScrollView
-              ref={scrollRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              scrollEventThrottle={16}
-              onMomentumScrollEnd={handleScroll}
-              style={styles.pager}
-              contentContainerStyle={styles.pagerContent}
-            >
-              <View style={styles.page}><ReportScreen /></View>
-              <View style={styles.page}><SalesScreen /></View>
-              <View style={styles.page}><SettingsScreen /></View>
-            </ScrollView>
-            <FloatingNav />
+          <View style={styles.outer}>
+            <View style={styles.frame}>
+              {currentPage === 0 && <ReportScreen />}
+              {currentPage === 1 && <SalesScreen />}
+              {currentPage === 2 && <SettingsScreen />}
+              <FloatingNav />
+            </View>
           </View>
         </PageContext.Provider>
       </WebTokenGuard>
@@ -59,8 +42,16 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  pager: { flex: 1 },
-  pagerContent: { flexDirection: 'row' },
-  page: { width: SCREEN_WIDTH, flex: 1 },
+  outer: {
+    flex: 1,
+    backgroundColor: IS_WEB ? '#C4A882' : colors.bg,
+    alignItems: IS_WEB ? ('center' as any) : 'stretch',
+  },
+  frame: {
+    flex: 1,
+    width: '100%' as any,
+    maxWidth: IS_WEB ? 430 : undefined,
+    backgroundColor: colors.bg,
+    ...(IS_WEB ? ({ boxShadow: '0 4px 40px rgba(0,0,0,0.2)' } as any) : {}),
+  },
 });
