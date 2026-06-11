@@ -83,7 +83,7 @@ export default function ReportScreen() {
       {/* Quick filter */}
       <div className="space-y-2">
         <p className="text-[11px] font-semibold text-cafe-muted uppercase tracking-widest">ช่วงเวลา</p>
-        <div className="flex gap-2 overflow-x-auto pb-0.5">
+        <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -117,7 +117,7 @@ export default function ReportScreen() {
 
       {/* Platform filter */}
       {platforms.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-0.5">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setPlatformFilter('all')}
             className={`px-3 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-colors ${
